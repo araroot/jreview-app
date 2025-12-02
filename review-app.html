@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Japanese Vocabulary Review</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: white;
+      overflow-x: hidden;
+    }
+
+    .header {
+      padding: 20px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    .progress-bar {
+      width: 100%;
+      max-width: 400px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      margin-bottom: 30px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 10px;
+      transition: width 0.3s ease;
+    }
+
+    .card-container {
+      width: 100%;
+      max-width: 400px;
+      height: 500px;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    .flashcard {
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      position: absolute;
+      touch-action: pan-y;
+    }
+
+    .flashcard.flipped .card-front {
+      display: none;
+    }
+
+    .flashcard.flipped .card-back {
+      display: flex;
+    }
+
+    .card-front, .card-back {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .card-back {
+      display: none;
+    }
+
+    .context {
+      font-size: 16px;
+      color: #6b7280;
+      text-align: center;
+      margin-top: 20px;
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    .word-front {
+      font-size: 72px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 10px;
+    }
+
+    .answer {
+      margin-top: 30px;
+    }
+
+    .word-display {
+      font-size: 48px;
+      font-weight: bold;
+      color: #3b82f6;
+      margin-bottom: 10px;
+    }
+
+    .reading-display {
+      font-size: 20px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    .meaning-display {
+      font-size: 24px;
+      color: #1f2937;
+      text-align: center;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
+    }
+
+    .btn {
+      padding: 15px 30px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: white;
+    }
+
+    .btn-hard {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .btn-good {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .btn-easy {
+      background: linear-gradient(135deg, #10b981, #059669);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .completion-screen {
+      display: none;
+      text-align: center;
+    }
+
+    .completion-screen.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .completion-emoji {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .completion-title {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .completion-message {
+      font-size: 18px;
+      opacity: 0.9;
+      margin-bottom: 30px;
+    }
+
+    .login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .login-screen.hidden {
+      display: none;
+    }
+
+    .login-btn {
+      padding: 15px 40px;
+      background: white;
+      color: #667eea;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tap-indicator {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+      opacity: 0.7;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 0.3; }
+    }
+
+    .swipe-indicator {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 400px;
+      margin-top: 20px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📚 Japanese Review</h1>
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-number" id="dueCount">0</div>
+        <div>Due Today</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="reviewedCount">0</div>
+        <div>Reviewed</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="streakCount">0</div>
+        <div>🔥 Streak</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <!-- Login Screen -->
+    <div class="login-screen" id="loginScreen">
+      <h2>Welcome! 👋</h2>
+      <p>Enter your User ID from the extension</p>
+      <input type="text" id="userIdInput" placeholder="user_xxxxx"
+             style="padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; width: 250px; margin-bottom: 15px;">
+      <button class="login-btn" id="loginBtn">Start Reviewing</button>
+      <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">
+        Find your User ID: Click extension icon → Copy ID
+      </p>
+    </div>
+
+    <!-- Review Screen -->
+    <div id="reviewScreen" style="display: none; width: 100%;">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+
+      <div class="card-container">
+        <div class="flashcard" id="flashcard">
+          <div class="card-front">
+            <div class="word-front" id="wordFront"></div>
+            <div class="context" id="contextDisplay"></div>
+            <div class="hint">Tap to reveal meaning</div>
+            <div class="tap-indicator">👆 Tap card to see answer</div>
+          </div>
+
+          <div class="card-back">
+            <div class="answer">
+              <div class="word-display" id="wordDisplay"></div>
+              <div class="reading-display" id="readingDisplay"></div>
+              <div class="meaning-display" id="meaningDisplay"></div>
+            </div>
+
+            <div class="action-buttons">
+              <button class="btn btn-hard" id="btnHard">❌ Hard</button>
+              <button class="btn btn-good" id="btnGood">✓ Good</button>
+              <button class="btn btn-easy" id="btnEasy">✅ Easy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="swipe-indicator">
+        <span>← Hard (1 day)</span>
+        <span>Good (3 days)</span>
+        <span>Easy (7 days) →</span>
+      </div>
+    </div>
+
+    <!-- Completion Screen -->
+    <div class="completion-screen" id="completionScreen">
+      <div class="completion-emoji">🎉</div>
+      <div class="completion-title">Great job!</div>
+      <div class="completion-message">You've reviewed all your words for today</div>
+      <button class="btn btn-good" onclick="location.reload()">Review Again</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <script>
+    // Firebase Configuration - USER NEEDS TO ADD THEIR CREDENTIALS
+
+    // Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDQgZ4XKuEbQ6mincj6R8bX6gBH_CUETUY",
+  authDomain: "japanese-learning-app-dc19d.firebaseapp.com",
+  databaseURL: "https://japanese-learning-app-dc19d-default-rtdb.firebaseio.com",
+  projectId: "japanese-learning-app-dc19d",
+  storageBucket: "japanese-learning-app-dc19d.firebasestorage.app",
+  messagingSenderId: "68430245068",
+  appId: "1:68430245068:web:c40f7e0a6717f054b4a669"
+};
+  
+    // Initialize Firebase
+    let app, auth, database;
+    let currentWords = [];
+    let currentIndex = 0;
+    let isFlipped = false;
+    let reviewedToday = 0;
+
+    function initFirebase() {
+      try {
+        app = firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        database = firebase.database();
+        console.log("Firebase initialized");
+        return true;
+      } catch (error) {
+        console.error("Firebase init error:", error);
+        alert("Please configure Firebase credentials in the HTML file");
+        return false;
+      }
+    }
+
+    // Sign in with user ID
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      try {
+        const userId = document.getElementById('userIdInput').value.trim();
+
+        if (!userId) {
+          alert("Please enter your User ID from the extension");
+          return;
+        }
+
+        // Store user ID
+        currentUserId = userId;
+        localStorage.setItem('savedUserId', userId);
+
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('reviewScreen').style.display = 'block';
+        await loadWords();
+      } catch (error) {
+        console.error("Login error:", error);
+        alert("Error: " + error.message);
+      }
+    });
+
+    // Load words from Firebase
+    async function loadWords() {
+      try {
+        if (!currentUserId) {
+          alert("User ID not set");
+          return;
+        }
+
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`Failed to load words: ${response.status}`);
+        }
+
+        const words = await response.json();
+
+        if (!words) {
+          document.getElementById('completionScreen').classList.add('active');
+          document.querySelector('.completion-message').textContent =
+            "No words saved yet. Start watching dramas!";
+          return;
+        }
+
+        // Filter words due for review
+        const now = Date.now();
+        currentWords = Object.entries(words)
+          .map(([id, word]) => ({ id, ...word }))
+          .filter(word => !word.mastered && word.nextReview <= now)
+          .sort((a, b) => a.nextReview - b.nextReview)
+          .slice(0, 15); // Max 15 words per session
+
+        if (currentWords.length === 0) {
+          document.getElementById('completionScreen').classList.add('active');
+          return;
+        }
+
+        document.getElementById('dueCount').textContent = currentWords.length;
+        showCurrentCard();
+      } catch (error) {
+        console.error("Error loading words:", error);
+      }
+    }
+
+    // Show current flashcard
+    function showCurrentCard() {
+      if (currentIndex >= currentWords.length) {
+        // Completed!
+        document.getElementById('reviewScreen').style.display = 'none';
+        document.getElementById('completionScreen').classList.add('active');
+        updateStats();
+        return;
+      }
+
+      const word = currentWords[currentIndex];
+      const progress = ((currentIndex + 1) / currentWords.length) * 100;
+      document.getElementById('progressFill').style.width = progress + '%';
+
+      // Show word prominently on front
+      document.getElementById('wordFront').textContent = word.word;
+
+      // Show context sentence below (without blanks)
+      const context = word.context || '';
+      document.getElementById('contextDisplay').textContent = context ? `"${context}"` : '';
+
+      // Set answer (back of card)
+      document.getElementById('wordDisplay').textContent = word.word;
+      document.getElementById('readingDisplay').textContent = word.reading;
+      document.getElementById('meaningDisplay').textContent = word.meaning;
+
+      // Reset card state
+      document.getElementById('flashcard').classList.remove('flipped');
+      isFlipped = false;
+    }
+
+    // Flip card
+    document.getElementById('flashcard').addEventListener('click', function() {
+      if (!isFlipped) {
+        this.classList.add('flipped');
+        isFlipped = true;
+      }
+    });
+
+    // Review buttons
+    document.getElementById('btnHard').addEventListener('click', () => reviewWord('hard'));
+    document.getElementById('btnGood').addEventListener('click', () => reviewWord('good'));
+    document.getElementById('btnEasy').addEventListener('click', () => reviewWord('easy'));
+
+    async function reviewWord(difficulty) {
+      const word = currentWords[currentIndex];
+      const now = Date.now();
+
+      // Calculate next review
+      const intervals = { hard: 1, good: 3, easy: 7 };
+      const daysToAdd = intervals[difficulty];
+      const nextReview = now + (daysToAdd * 24 * 60 * 60 * 1000);
+
+      // Update word
+      word.lastReviewed = now;
+      word.reviewCount = (word.reviewCount || 0) + 1;
+      word.difficulty = difficulty;
+      word.nextReview = nextReview;
+
+      // Mark as mastered if reviewed 5+ times with good/easy
+      if (word.reviewCount >= 5 && (difficulty === 'good' || difficulty === 'easy')) {
+        word.mastered = true;
+      }
+
+      // Save to Firebase using REST API
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words/${word.id}.json`;
+
+        const response = await fetch(url, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lastReviewed: word.lastReviewed,
+            reviewCount: word.reviewCount,
+            difficulty: word.difficulty,
+            nextReview: word.nextReview,
+            mastered: word.mastered
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Update failed: ${response.status}`);
+        }
+      } catch (error) {
+        console.error("Error updating word:", error);
+      }
+
+      // Next card
+      reviewedToday++;
+      document.getElementById('reviewedCount').textContent = reviewedToday;
+      currentIndex++;
+      showCurrentCard();
+    }
+
+    async function updateStats() {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/stats.json`;
+
+        await fetch(url, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reviewedToday: reviewedToday,
+            lastReviewDate: Date.now()
+          })
+        });
+      } catch (error) {
+        console.error("Error updating stats:", error);
+      }
+    }
+
+    // Initialize
+    if (initFirebase()) {
+      // Check if user ID is already saved
+      const savedUserId = localStorage.getItem('savedUserId');
+      if (savedUserId) {
+        currentUserId = savedUserId;
+        document.getElementById('userIdInput').value = savedUserId;
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('reviewScreen').style.display = 'block';
+        loadWords();
+      }
+    }
+  </script>
+</body>
+</html>
