@@ -358,7 +358,8 @@
       <div class="completion-emoji">🎉</div>
       <div class="completion-title">Great job!</div>
       <div class="completion-message">You've reviewed all your words for today</div>
-      <button class="btn btn-good" onclick="location.reload()">Review Again</button>
+      <button class="btn btn-good" id="reviewAgainBtn">🔄 Review Again</button>
+      <button class="btn btn-easy" id="practiceAllBtn" style="margin-top: 15px;">📚 Practice All Words</button>
     </div>
   </div>
 
@@ -583,6 +584,52 @@ const firebaseConfig = {
         console.error("Error updating stats:", error);
       }
     }
+
+    // Review Again - loop through same words
+    document.getElementById('reviewAgainBtn').addEventListener('click', () => {
+      if (currentWords.length > 0) {
+        currentIndex = 0;
+        document.getElementById('completionScreen').classList.remove('active');
+        document.getElementById('reviewScreen').style.display = 'block';
+        showCurrentCard();
+      }
+    });
+
+    // Practice All Words - load all words regardless of due date
+    document.getElementById('practiceAllBtn').addEventListener('click', async () => {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          alert("No words saved yet!");
+          return;
+        }
+
+        // Load ALL words (ignore nextReview and mastered status)
+        currentWords = Object.entries(words)
+          .map(([id, word]) => ({ id, ...word }))
+          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)) // Most recent first
+          .slice(0, 50); // Limit to 50 words to avoid overwhelming
+
+        if (currentWords.length === 0) {
+          alert("No words to practice!");
+          return;
+        }
+
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+        document.getElementById('completionScreen').classList.remove('active');
+        document.getElementById('reviewScreen').style.display = 'block';
+        showCurrentCard();
+      } catch (error) {
+        console.error("Error loading all words:", error);
+        alert("Error loading words: " + error.message);
+      }
+    });
 
     // Initialize
     if (initFirebase()) {
