@@ -172,6 +172,28 @@
       text-align: center;
     }
 
+    .context-back {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f3f4f6;
+      border-radius: 12px;
+      max-width: 100%;
+    }
+
+    .context-sentence {
+      font-size: 18px;
+      color: #1f2937;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .context-translation {
+      font-size: 16px;
+      color: #6b7280;
+      font-style: italic;
+      line-height: 1.5;
+    }
+
     .action-buttons {
       display: flex;
       gap: 15px;
@@ -335,6 +357,11 @@
               <div class="word-display" id="wordDisplay"></div>
               <div class="reading-display" id="readingDisplay"></div>
               <div class="meaning-display" id="meaningDisplay"></div>
+            </div>
+
+            <div class="context-back" id="contextBack">
+              <div class="context-sentence" id="contextSentenceBack"></div>
+              <div class="context-translation" id="contextTranslation"></div>
             </div>
 
             <div class="action-buttons">
@@ -510,6 +537,17 @@ const firebaseConfig = {
       document.getElementById('wordDisplay').textContent = word.word;
       document.getElementById('readingDisplay').textContent = word.reading;
       document.getElementById('meaningDisplay').textContent = word.meaning;
+
+      // Show context sentence and translation on back
+      const contextBack = document.getElementById('contextBack');
+      if (context) {
+        document.getElementById('contextSentenceBack').textContent = context;
+        document.getElementById('contextTranslation').textContent =
+          word.contextTranslation || 'English translation not available yet';
+        contextBack.style.display = 'block';
+      } else {
+        contextBack.style.display = 'none';
+      }
 
       // Reset card state
       document.getElementById('flashcard').classList.remove('flipped');
