@@ -418,7 +418,7 @@
       <div class="completion-message">You've reviewed all your words for today</div>
       <button class="btn btn-good" id="reviewAgainBtn">🔄 Review Today's Words Again</button>
       <button class="btn btn-good" id="randomWordsBtn" style="margin-top: 15px;">🎲 Review 10 Random Words</button>
-      <button class="btn btn-easy" id="practiceAllBtn" style="margin-top: 15px;">📚 Practice All Words</button>
+      <button class="btn btn-easy" id="freshWordsBtn" style="margin-top: 15px;">✨ Review Fresh Words</button>
     </div>
   </div>
 
@@ -785,8 +785,8 @@ const firebaseConfig = {
       }
     });
 
-    // Practice All Words - load all words regardless of due date
-    document.getElementById('practiceAllBtn').addEventListener('click', async () => {
+    // Review Fresh Words - load most recently saved words (last 30)
+    document.getElementById('freshWordsBtn').addEventListener('click', async () => {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
@@ -797,14 +797,14 @@ const firebaseConfig = {
           return;
         }
 
-        // Load ALL words (ignore nextReview and mastered status)
+        // Load most recent 30 words (perfect for cleaning up after watching)
         currentWords = Object.entries(words)
           .map(([id, word]) => ({ id, ...word }))
           .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)) // Most recent first
-          .slice(0, 50); // Limit to 50 words to avoid overwhelming
+          .slice(0, 30); // Last 30 words
 
         if (currentWords.length === 0) {
-          alert("No words to practice!");
+          alert("No words saved yet!");
           return;
         }
 
@@ -816,7 +816,7 @@ const firebaseConfig = {
         document.getElementById('reviewScreen').style.display = 'block';
         showCurrentCard();
       } catch (error) {
-        console.error("Error loading all words:", error);
+        console.error("Error loading fresh words:", error);
         alert("Error loading words: " + error.message);
       }
     });
