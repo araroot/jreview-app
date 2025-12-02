@@ -444,6 +444,7 @@ const firebaseConfig = {
         const words = await response.json();
 
         if (!words) {
+          document.getElementById('reviewScreen').style.display = 'none';
           document.getElementById('completionScreen').classList.add('active');
           document.querySelector('.completion-message').textContent =
             "No words saved yet. Start watching dramas!";
@@ -458,8 +459,13 @@ const firebaseConfig = {
           .sort((a, b) => a.nextReview - b.nextReview)
           .slice(0, 15); // Max 15 words per session
 
+        console.log(`Loaded ${currentWords.length} words due for review`);
+
         if (currentWords.length === 0) {
+          document.getElementById('reviewScreen').style.display = 'none';
           document.getElementById('completionScreen').classList.add('active');
+          document.querySelector('.completion-message').textContent =
+            "No words due right now. Practice anyway?";
           return;
         }
 
