@@ -435,6 +435,7 @@ const firebaseConfig = {
         }
 
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        console.log("Fetching words from:", url);
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -442,6 +443,7 @@ const firebaseConfig = {
         }
 
         const words = await response.json();
+        console.log("Raw words from Firebase:", words);
 
         if (!words) {
           document.getElementById('reviewScreen').style.display = 'none';
@@ -459,13 +461,20 @@ const firebaseConfig = {
           .sort((a, b) => a.nextReview - b.nextReview)
           .slice(0, 15); // Max 15 words per session
 
-        console.log(`Loaded ${currentWords.length} words due for review`);
+        console.log(`Loaded ${currentWords.length} words due for review out of ${Object.keys(words).length} total`);
 
         if (currentWords.length === 0) {
-          document.getElementById('reviewScreen').style.display = 'none';
-          document.getElementById('completionScreen').classList.add('active');
+          console.log("No words due - showing completion screen");
+          const reviewScreen = document.getElementById('reviewScreen');
+          const completionScreen = document.getElementById('completionScreen');
+
+          reviewScreen.style.display = 'none';
+          completionScreen.classList.add('active');
           document.querySelector('.completion-message').textContent =
             "No words due right now. Practice anyway?";
+
+          console.log("Review screen display:", reviewScreen.style.display);
+          console.log("Completion screen classes:", completionScreen.className);
           return;
         }
 
