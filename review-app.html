@@ -693,18 +693,25 @@ const firebaseConfig = {
       // Show word prominently on front
       document.getElementById('wordFront').textContent = word.word;
 
-      // Show context sentence below (without blanks)
+      // Check if context actually contains the word (timing issues may cause mismatch)
       const context = word.context || '';
-      document.getElementById('contextDisplay').textContent = context ? `"${context}"` : '';
+      const contextContainsWord = context.includes(word.word);
+
+      // Show context sentence below only if it contains the word
+      if (contextContainsWord) {
+        document.getElementById('contextDisplay').textContent = `"${context}"`;
+      } else {
+        document.getElementById('contextDisplay').textContent = '';
+      }
 
       // Set answer (back of card)
       document.getElementById('wordDisplay').textContent = word.word;
       document.getElementById('readingDisplay').textContent = word.reading;
       document.getElementById('meaningDisplay').textContent = word.meaning;
 
-      // Show context sentence and translation on back
+      // Show context sentence and translation on back only if context contains word
       const contextBack = document.getElementById('contextBack');
-      if (context) {
+      if (contextContainsWord && context) {
         document.getElementById('contextSentenceBack').textContent = context;
         document.getElementById('contextTranslation').textContent =
           word.contextTranslation || 'English translation not available yet';
@@ -743,10 +750,6 @@ const firebaseConfig = {
 
     async function deleteCurrentWord() {
       const word = currentWords[currentIndex];
-
-      if (!confirm(`Delete "${word.word}"? This cannot be undone.`)) {
-        return;
-      }
 
       try {
         // Save to deletedWords list for learning
