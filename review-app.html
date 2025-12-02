@@ -360,10 +360,19 @@
       <p>Enter your User ID from the extension</p>
       <input type="text" id="userIdInput" placeholder="user_xxxxx"
              style="padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; width: 250px; margin-bottom: 15px;">
-      <button class="login-btn" id="loginBtn">Start Reviewing</button>
+      <button class="login-btn" id="loginBtn">Continue</button>
       <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">
         Find your User ID: Click extension icon → Copy ID
       </p>
+    </div>
+
+    <!-- Menu Screen -->
+    <div class="login-screen" id="menuScreen" style="display: none;">
+      <h2>Choose Review Mode 📚</h2>
+      <p style="margin-bottom: 30px;">What would you like to practice today?</p>
+      <button class="login-btn" id="menuDueWords" style="margin-bottom: 15px;">📅 Today's Due Words (<span id="menuDueCount">0</span>)</button>
+      <button class="login-btn" id="menuRandomWords" style="margin-bottom: 15px;">🎲 10 Random Words</button>
+      <button class="login-btn" id="menuFreshWords">✨ Fresh Words (Last 30)</button>
     </div>
 
     <!-- Review Screen -->
@@ -477,14 +486,133 @@ const firebaseConfig = {
         currentUserId = userId;
         localStorage.setItem('savedUserId', userId);
 
+        // Show menu screen instead of auto-starting review
         document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('reviewScreen').style.display = 'block';
-        await loadWords();
+        document.getElementById('menuScreen').style.display = 'flex';
+
+        // Load word counts for menu
+        await updateMenuCounts();
       } catch (error) {
         console.error("Login error:", error);
         alert("Error: " + error.message);
       }
     });
+
+    // Update menu with word counts
+    async function updateMenuCounts() {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          document.getElementById('menuDueCount').textContent = '0';
+          return;
+        }
+
+        // Count words due today
+        const now = Date.now();
+        const dueCount = Object.values(words)
+          .filter(word => !word.mastered && word.nextReview <= now)
+          .length;
+
+        document.getElementById('menuDueCount').textContent = dueCount;
+      } catch (error) {
+        console.error("Error loading word counts:", error);
+      }
+    }
+
+    // Menu button: Today's Due Words
+    document.getElementById('menuDueWords').addEventListener('click', async () => {
+      document.getElementById('menuScreen').style.display = 'none';
+      document.getElementById('reviewScreen').style.display = 'block';
+      await loadWords();
+    });
+
+    // Menu button: 10 Random Words
+    document.getElementById('menuRandomWords').addEventListener('click', async () => {
+      document.getElementById('menuScreen').style.display = 'none';
+      await loadRandomWords();
+    });
+
+    // Menu button: Fresh Words
+    document.getElementById('menuFreshWords').addEventListener('click', async () => {
+      document.getElementById('menuScreen').style.display = 'none';
+      await loadFreshWords();
+    });
+
+    // Load random words
+    async function loadRandomWords() {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          alert("No words saved yet!");
+          document.getElementById('menuScreen').style.display = 'flex';
+          return;
+        }
+
+        const allWords = Object.entries(words).map(([id, word]) => ({ id, ...word }));
+        const shuffled = allWords.sort(() => Math.random() - 0.5);
+        currentWords = shuffled.slice(0, Math.min(10, shuffled.length));
+        todaysWords = []; // No re-review for random mode
+
+        if (currentWords.length === 0) {
+          alert("No words to practice!");
+          document.getElementById('menuScreen').style.display = 'flex';
+          return;
+        }
+
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+        document.getElementById('reviewScreen').style.display = 'block';
+        showCurrentCard();
+      } catch (error) {
+        console.error("Error loading random words:", error);
+        alert("Error: " + error.message);
+      }
+    }
+
+    // Load fresh words (most recent)
+    async function loadFreshWords() {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          alert("No words saved yet!");
+          document.getElementById('menuScreen').style.display = 'flex';
+          return;
+        }
+
+        currentWords = Object.entries(words)
+          .map(([id, word]) => ({ id, ...word }))
+          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+          .slice(0, 30);
+        todaysWords = []; // No re-review for fresh mode
+
+        if (currentWords.length === 0) {
+          alert("No words saved yet!");
+          document.getElementById('menuScreen').style.display = 'flex';
+          return;
+        }
+
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+        document.getElementById('reviewScreen').style.display = 'block';
+        showCurrentCard();
+      } catch (error) {
+        console.error("Error loading fresh words:", error);
+        alert("Error: " + error.message);
+      }
+    }
 
     // Load words from Firebase
     async function loadWords() {
@@ -743,82 +871,23 @@ const firebaseConfig = {
         document.getElementById('reviewScreen').style.display = 'block';
         showCurrentCard();
       } else {
-        alert("No words were due today!");
+        // Go back to menu
+        document.getElementById('completionScreen').classList.remove('active');
+        document.getElementById('menuScreen').style.display = 'flex';
+        updateMenuCounts();
       }
     });
 
-    // Review 10 Random Words
+    // Review 10 Random Words from completion screen
     document.getElementById('randomWordsBtn').addEventListener('click', async () => {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
-
-        if (!words) {
-          alert("No words saved yet!");
-          return;
-        }
-
-        // Get all words as array
-        const allWords = Object.entries(words)
-          .map(([id, word]) => ({ id, ...word }));
-
-        if (allWords.length === 0) {
-          alert("No words to practice!");
-          return;
-        }
-
-        // Shuffle and pick 10 random words
-        const shuffled = allWords.sort(() => Math.random() - 0.5);
-        currentWords = shuffled.slice(0, Math.min(10, shuffled.length));
-
-        currentIndex = 0;
-        reviewedToday = 0;
-        document.getElementById('dueCount').textContent = currentWords.length;
-        document.getElementById('reviewedCount').textContent = 0;
-        document.getElementById('completionScreen').classList.remove('active');
-        document.getElementById('reviewScreen').style.display = 'block';
-        showCurrentCard();
-      } catch (error) {
-        console.error("Error loading random words:", error);
-        alert("Error loading words: " + error.message);
-      }
+      document.getElementById('completionScreen').classList.remove('active');
+      await loadRandomWords();
     });
 
-    // Review Fresh Words - load most recently saved words (last 30)
+    // Review Fresh Words from completion screen
     document.getElementById('freshWordsBtn').addEventListener('click', async () => {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
-
-        if (!words) {
-          alert("No words saved yet!");
-          return;
-        }
-
-        // Load most recent 30 words (perfect for cleaning up after watching)
-        currentWords = Object.entries(words)
-          .map(([id, word]) => ({ id, ...word }))
-          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)) // Most recent first
-          .slice(0, 30); // Last 30 words
-
-        if (currentWords.length === 0) {
-          alert("No words saved yet!");
-          return;
-        }
-
-        currentIndex = 0;
-        reviewedToday = 0;
-        document.getElementById('dueCount').textContent = currentWords.length;
-        document.getElementById('reviewedCount').textContent = 0;
-        document.getElementById('completionScreen').classList.remove('active');
-        document.getElementById('reviewScreen').style.display = 'block';
-        showCurrentCard();
-      } catch (error) {
-        console.error("Error loading fresh words:", error);
-        alert("Error loading words: " + error.message);
-      }
+      document.getElementById('completionScreen').classList.remove('active');
+      await loadFreshWords();
     });
 
     // Initialize
@@ -829,8 +898,8 @@ const firebaseConfig = {
         currentUserId = savedUserId;
         document.getElementById('userIdInput').value = savedUserId;
         document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('reviewScreen').style.display = 'block';
-        loadWords();
+        document.getElementById('menuScreen').style.display = 'flex';
+        updateMenuCounts();
       }
     }
   </script>
