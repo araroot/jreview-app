@@ -416,7 +416,7 @@
       <div class="completion-emoji">🎉</div>
       <div class="completion-title">Great job!</div>
       <div class="completion-message">You've reviewed all your words for today</div>
-      <button class="btn btn-good" id="reviewAgainBtn">🔄 Review Again</button>
+      <button class="btn btn-good" id="reviewAgainBtn">🎲 Review 10 Random Words</button>
       <button class="btn btn-easy" id="practiceAllBtn" style="margin-top: 15px;">📚 Practice All Words</button>
     </div>
   </div>
@@ -729,13 +729,41 @@ const firebaseConfig = {
       }
     }
 
-    // Review Again - loop through same words
-    document.getElementById('reviewAgainBtn').addEventListener('click', () => {
-      if (currentWords.length > 0) {
+    // Review 10 Random Words
+    document.getElementById('reviewAgainBtn').addEventListener('click', async () => {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          alert("No words saved yet!");
+          return;
+        }
+
+        // Get all words as array
+        const allWords = Object.entries(words)
+          .map(([id, word]) => ({ id, ...word }));
+
+        if (allWords.length === 0) {
+          alert("No words to practice!");
+          return;
+        }
+
+        // Shuffle and pick 10 random words
+        const shuffled = allWords.sort(() => Math.random() - 0.5);
+        currentWords = shuffled.slice(0, Math.min(10, shuffled.length));
+
         currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
         document.getElementById('completionScreen').classList.remove('active');
         document.getElementById('reviewScreen').style.display = 'block';
         showCurrentCard();
+      } catch (error) {
+        console.error("Error loading random words:", error);
+        alert("Error loading words: " + error.message);
       }
     });
 
