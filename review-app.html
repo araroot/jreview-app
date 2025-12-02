@@ -121,10 +121,39 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      position: relative;
     }
 
     .card-back {
       display: none;
+    }
+
+    .delete-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 10;
+    }
+
+    .delete-btn:hover {
+      background: #dc2626;
+      transform: scale(1.1);
+    }
+
+    .delete-btn:active {
+      transform: scale(0.95);
     }
 
     .context {
@@ -346,6 +375,7 @@
       <div class="card-container">
         <div class="flashcard" id="flashcard">
           <div class="card-front">
+            <button class="delete-btn" id="deleteBtnFront" title="Delete this word">🗑️</button>
             <div class="word-front" id="wordFront"></div>
             <div class="context" id="contextDisplay"></div>
             <div class="hint">Tap to reveal meaning</div>
@@ -353,6 +383,7 @@
           </div>
 
           <div class="card-back">
+            <button class="delete-btn" id="deleteBtnBack" title="Delete this word">🗑️</button>
             <div class="answer">
               <div class="word-display" id="wordDisplay"></div>
               <div class="reading-display" id="readingDisplay"></div>
@@ -555,12 +586,72 @@ const firebaseConfig = {
     }
 
     // Flip card
-    document.getElementById('flashcard').addEventListener('click', function() {
+    document.getElementById('flashcard').addEventListener('click', function(e) {
+      // Don't flip if clicking delete button
+      if (e.target.classList.contains('delete-btn')) {
+        return;
+      }
       if (!isFlipped) {
         this.classList.add('flipped');
         isFlipped = true;
       }
     });
+
+    // Delete word functionality
+    document.getElementById('deleteBtnFront').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCurrentWord();
+    });
+
+    document.getElementById('deleteBtnBack').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCurrentWord();
+    });
+
+    async function deleteCurrentWord() {
+      const word = currentWords[currentIndex];
+
+      if (!confirm(`Delete "${word.word}"? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        // Delete from Firebase
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words/${word.id}.json`;
+        const response = await fetch(url, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Delete failed: ${response.status}`);
+        }
+
+        console.log('🗑️ Word deleted:', word.word);
+
+        // Remove from current array
+        currentWords.splice(currentIndex, 1);
+
+        // Update stats
+        document.getElementById('dueCount').textContent = currentWords.length;
+
+        // Show next card or completion
+        if (currentWords.length === 0 || currentIndex >= currentWords.length) {
+          document.getElementById('reviewScreen').style.display = 'none';
+          document.getElementById('completionScreen').classList.add('active');
+          document.querySelector('.completion-message').textContent =
+            'All done! You deleted the last word.';
+        } else {
+          // Show current card (same index, since we removed one)
+          if (currentIndex >= currentWords.length) {
+            currentIndex = currentWords.length - 1;
+          }
+          showCurrentCard();
+        }
+      } catch (error) {
+        console.error('Error deleting word:', error);
+        alert('Failed to delete word: ' + error.message);
+      }
+    }
 
     // Review buttons
     document.getElementById('btnHard').addEventListener('click', () => reviewWord('hard'));
