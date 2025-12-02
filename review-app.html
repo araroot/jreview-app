@@ -416,7 +416,8 @@
       <div class="completion-emoji">🎉</div>
       <div class="completion-title">Great job!</div>
       <div class="completion-message">You've reviewed all your words for today</div>
-      <button class="btn btn-good" id="reviewAgainBtn">🎲 Review 10 Random Words</button>
+      <button class="btn btn-good" id="reviewAgainBtn">🔄 Review Today's Words Again</button>
+      <button class="btn btn-good" id="randomWordsBtn" style="margin-top: 15px;">🎲 Review 10 Random Words</button>
       <button class="btn btn-easy" id="practiceAllBtn" style="margin-top: 15px;">📚 Practice All Words</button>
     </div>
   </div>
@@ -443,6 +444,7 @@ const firebaseConfig = {
     // Initialize Firebase
     let app, auth, database;
     let currentWords = [];
+    let todaysWords = []; // Store today's due words for re-review
     let currentIndex = 0;
     let isFlipped = false;
     let reviewedToday = 0;
@@ -520,6 +522,9 @@ const firebaseConfig = {
           .slice(0, 15); // Max 15 words per session
 
         console.log(`Loaded ${currentWords.length} words due for review out of ${Object.keys(words).length} total`);
+
+        // Save today's words for re-review
+        todaysWords = [...currentWords];
 
         if (currentWords.length === 0) {
           console.log("No words due - showing completion screen");
@@ -729,8 +734,21 @@ const firebaseConfig = {
       }
     }
 
+    // Review Today's Words Again - loop through same words that were due
+    document.getElementById('reviewAgainBtn').addEventListener('click', () => {
+      if (todaysWords.length > 0) {
+        currentWords = [...todaysWords]; // Copy today's words
+        currentIndex = 0;
+        document.getElementById('completionScreen').classList.remove('active');
+        document.getElementById('reviewScreen').style.display = 'block';
+        showCurrentCard();
+      } else {
+        alert("No words were due today!");
+      }
+    });
+
     // Review 10 Random Words
-    document.getElementById('reviewAgainBtn').addEventListener('click', async () => {
+    document.getElementById('randomWordsBtn').addEventListener('click', async () => {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
