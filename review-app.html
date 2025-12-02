@@ -64,6 +64,12 @@
       position: relative;
     }
 
+    @media (max-height: 700px) {
+      .main-container {
+        padding: 10px;
+      }
+    }
+
     .progress-bar {
       width: 100%;
       max-width: 400px;
@@ -84,9 +90,15 @@
     .card-container {
       width: 100%;
       max-width: 400px;
-      height: 500px;
+      height: 400px;
       position: relative;
       perspective: 1000px;
+    }
+
+    @media (max-height: 700px) {
+      .card-container {
+        height: 320px;
+      }
     }
 
     .flashcard {
@@ -172,6 +184,12 @@
       margin-bottom: 10px;
     }
 
+    @media (max-height: 700px) {
+      .word-front {
+        font-size: 56px;
+      }
+    }
+
     .hint {
       font-size: 14px;
       color: #6b7280;
@@ -209,6 +227,13 @@
       max-width: 100%;
     }
 
+    @media (max-height: 700px) {
+      .context-back {
+        margin-top: 15px;
+        padding: 12px;
+      }
+    }
+
     .context-sentence {
       font-size: 18px;
       color: #1f2937;
@@ -221,6 +246,15 @@
       color: #6b7280;
       font-style: italic;
       line-height: 1.5;
+    }
+
+    @media (max-height: 700px) {
+      .context-sentence {
+        font-size: 16px;
+      }
+      .context-translation {
+        font-size: 14px;
+      }
     }
 
     .action-buttons {
