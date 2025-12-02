@@ -749,7 +749,22 @@ const firebaseConfig = {
       }
 
       try {
-        // Delete from Firebase
+        // Save to deletedWords list for learning
+        const deletedUrl = `${firebaseConfig.databaseURL}/users/${currentUserId}/deletedWords/${word.id}.json`;
+        await fetch(deletedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            word: word.word,
+            reading: word.reading,
+            meaning: word.meaning,
+            deletedAt: Date.now()
+          })
+        });
+
+        // Delete from active words
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words/${word.id}.json`;
         const response = await fetch(url, {
           method: 'DELETE'
@@ -759,7 +774,7 @@ const firebaseConfig = {
           throw new Error(`Delete failed: ${response.status}`);
         }
 
-        console.log('🗑️ Word deleted:', word.word);
+        console.log('🗑️ Word deleted and added to skip list:', word.word);
 
         // Remove from current array
         currentWords.splice(currentIndex, 1);
