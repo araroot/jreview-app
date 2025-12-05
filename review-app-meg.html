@@ -568,7 +568,7 @@
         • AI considers your progress (Easy/Good/Hard history)<br>
         • Deleted words help AI understand what's not useful for you
       </div>
-      <button class="btn btn-good" id="continueBtn" style="padding: 15px 40px;">Continue →</button>
+      <button type="button" class="btn btn-good" id="continueBtn" style="padding: 15px 40px;">Continue →</button>
     </div>
   </div>
 
@@ -1487,9 +1487,23 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
     });
 
     // Continue button - return to show list after session summary
-    document.getElementById('continueBtn').addEventListener('click', () => {
-      document.getElementById('completionScreen').classList.remove('active');
-      document.getElementById('showListScreen').style.display = 'flex';
+    document.getElementById('continueBtn').addEventListener('click', (e) => {
+      console.log('✅ Continue button clicked');
+      e.preventDefault();
+      e.stopPropagation();
+
+      const completionScreen = document.getElementById('completionScreen');
+      const showListScreen = document.getElementById('showListScreen');
+
+      // Explicitly hide completion screen (Safari compatibility)
+      completionScreen.classList.remove('active');
+      completionScreen.style.display = 'none';
+
+      // Explicitly show show list screen
+      showListScreen.style.display = 'flex';
+
+      console.log('✅ Navigating to show list');
+
       // Reload show list to refresh counts
       loadShowList();
     });
