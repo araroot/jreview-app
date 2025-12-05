@@ -464,22 +464,23 @@
       </p>
     </div>
 
-    <!-- Menu Screen -->
-    <div class="login-screen" id="menuScreen" style="display: none;">
-      <h2>Choose Review Mode 📚</h2>
-      <p style="margin-bottom: 30px;">What would you like to practice today?</p>
-      <button class="login-btn" id="menuDueWords" style="margin-bottom: 15px;">📅 Today's Due Words (<span id="menuDueCount">0</span>)</button>
-      <button class="login-btn" id="menuRandomWords" style="margin-bottom: 15px;">🎲 10 Random Words</button>
-      <button class="login-btn" id="menuFreshWords" style="margin-bottom: 15px;">✨ Fresh Words (Last 30)</button>
-      <button class="login-btn" id="menuShowList" style="margin-bottom: 15px;">📺 Review by Show</button>
-    </div>
-
-    <!-- Show List Screen -->
+    <!-- Show List Screen (Main Menu) -->
     <div class="login-screen" id="showListScreen" style="display: none;">
       <h2>Choose a Show 📺</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
-      <div id="showList" style="max-height: 400px; overflow-y: auto;"></div>
-      <button class="login-btn" id="backToMenuBtn" style="margin-top: 20px;">← Back to Menu</button>
+      <button class="login-btn" id="reviewAllShows" style="margin-bottom: 20px; background: linear-gradient(135deg, #10b981, #059669); font-size: 16px;">📅 Review All Shows (Due: <span id="allShowsDueCount">0</span>)</button>
+      <div id="showList" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;"></div>
+    </div>
+
+    <!-- Show Options Screen -->
+    <div class="login-screen" id="showOptionsScreen" style="display: none;">
+      <h2 id="showOptionsTitle">📺 Show Name</h2>
+      <p style="margin-bottom: 30px; font-size: 14px;">How do you want to review?</p>
+      <button class="login-btn" id="optionAllWords" style="margin-bottom: 15px;">📚 All Words (<span id="optionAllWordsCount">0</span>)</button>
+      <button class="login-btn" id="optionDueWords" style="margin-bottom: 15px;">📅 Due Words (<span id="optionDueWordsCount">0</span>)</button>
+      <button class="login-btn" id="optionRandomWords" style="margin-bottom: 15px;">🎲 10 Random Words</button>
+      <button class="login-btn" id="optionFreshWords" style="margin-bottom: 15px;">✨ Latest 30 Words</button>
+      <button class="login-btn" id="backToShowsBtn" style="margin-top: 10px; background: rgba(255,255,255,0.2);">← Back to Shows</button>
     </div>
 
     <!-- Review Screen -->
@@ -597,72 +598,57 @@ const firebaseConfig = {
         currentUserId = userId;
         localStorage.setItem('savedUserId', userId);
 
-        // Show menu screen instead of auto-starting review
+        // Show show list screen instead of old menu
         document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('menuScreen').style.display = 'flex';
+        document.getElementById('showListScreen').style.display = 'flex';
 
-        // Load word counts for menu
-        await updateMenuCounts();
+        // Load show list and word counts
+        await loadShowList();
       } catch (error) {
         console.error("Login error:", error);
         alert("Error: " + error.message);
       }
     });
 
-    // Update menu with word counts
-    async function updateMenuCounts() {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
+    // Store selected show for options screen
+    let selectedShow = null;
 
-        if (!words) {
-          document.getElementById('menuDueCount').textContent = '0';
-          return;
-        }
-
-        // Count words due today
-        const now = Date.now();
-        const dueCount = Object.values(words)
-          .filter(word => !word.mastered && word.nextReview <= now)
-          .length;
-
-        document.getElementById('menuDueCount').textContent = dueCount;
-      } catch (error) {
-        console.error("Error loading word counts:", error);
-      }
-    }
-
-    // Menu button: Today's Due Words
-    document.getElementById('menuDueWords').addEventListener('click', async () => {
-      document.getElementById('menuScreen').style.display = 'none';
+    // Review All Shows button - loads due words across all shows
+    document.getElementById('reviewAllShows').addEventListener('click', async () => {
+      document.getElementById('showListScreen').style.display = 'none';
       document.getElementById('reviewScreen').style.display = 'block';
       await loadWords();
     });
 
-    // Menu button: 10 Random Words
-    document.getElementById('menuRandomWords').addEventListener('click', async () => {
-      document.getElementById('menuScreen').style.display = 'none';
-      await loadRandomWords();
-    });
-
-    // Menu button: Fresh Words
-    document.getElementById('menuFreshWords').addEventListener('click', async () => {
-      document.getElementById('menuScreen').style.display = 'none';
-      await loadFreshWords();
-    });
-
-    // Menu button: Show List
-    document.getElementById('menuShowList').addEventListener('click', async () => {
-      document.getElementById('menuScreen').style.display = 'none';
+    // Back to shows from options
+    document.getElementById('backToShowsBtn').addEventListener('click', () => {
+      document.getElementById('showOptionsScreen').style.display = 'none';
       document.getElementById('showListScreen').style.display = 'flex';
-      await loadShowList();
     });
 
-    // Back to menu from show list
-    document.getElementById('backToMenuBtn').addEventListener('click', () => {
-      document.getElementById('showListScreen').style.display = 'none';
-      document.getElementById('menuScreen').style.display = 'flex';
+    // Show options handlers
+    document.getElementById('optionAllWords').addEventListener('click', async () => {
+      if (!selectedShow) return;
+      document.getElementById('showOptionsScreen').style.display = 'none';
+      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'all');
+    });
+
+    document.getElementById('optionDueWords').addEventListener('click', async () => {
+      if (!selectedShow) return;
+      document.getElementById('showOptionsScreen').style.display = 'none';
+      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'due');
+    });
+
+    document.getElementById('optionRandomWords').addEventListener('click', async () => {
+      if (!selectedShow) return;
+      document.getElementById('showOptionsScreen').style.display = 'none';
+      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'random');
+    });
+
+    document.getElementById('optionFreshWords').addEventListener('click', async () => {
+      if (!selectedShow) return;
+      document.getElementById('showOptionsScreen').style.display = 'none';
+      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'fresh');
     });
 
     // Load random words
@@ -747,12 +733,20 @@ const firebaseConfig = {
 
         if (!words) {
           document.getElementById('showList').innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No words saved yet! Start watching dramas!</p>';
+          document.getElementById('allShowsDueCount').textContent = '0';
           return;
         }
 
+        const allWords = Object.values(words);
+        const now = Date.now();
+
+        // Calculate due words count for "Review All Shows" button
+        const dueCount = allWords.filter(word => !word.mastered && word.nextReview <= now).length;
+        document.getElementById('allShowsDueCount').textContent = dueCount;
+
         // Group words by show
         const showMap = {};
-        Object.values(words).forEach(word => {
+        allWords.forEach(word => {
           if (word.show) {
             const key = `${word.show}_S${word.season}E${word.episode}`;
             if (!showMap[key]) {
@@ -784,7 +778,7 @@ const firebaseConfig = {
           btn.style.marginBottom = '10px';
           btn.style.width = '100%';
           btn.textContent = `${show.name} S${show.season}E${show.episode} (${show.count} words)`;
-          btn.addEventListener('click', () => loadWordsByShow(show.name, show.season, show.episode));
+          btn.addEventListener('click', () => showOptionsForShow(show));
           showListEl.appendChild(btn);
         });
       } catch (error) {
@@ -793,8 +787,39 @@ const firebaseConfig = {
       }
     }
 
-    // Load words from a specific show
-    async function loadWordsByShow(showName, season, episode) {
+    // Show options screen for selected show
+    async function showOptionsForShow(show) {
+      selectedShow = show;
+      document.getElementById('showListScreen').style.display = 'none';
+      document.getElementById('showOptionsScreen').style.display = 'flex';
+      document.getElementById('showOptionsTitle').textContent = `📺 ${show.name} S${show.season}E${show.episode}`;
+
+      // Calculate word counts for this show
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (words) {
+          const showWords = Object.values(words).filter(word =>
+            word.show === show.name &&
+            word.season === show.season &&
+            word.episode === show.episode
+          );
+
+          const now = Date.now();
+          const dueCount = showWords.filter(word => !word.mastered && word.nextReview <= now).length;
+
+          document.getElementById('optionAllWordsCount').textContent = showWords.length;
+          document.getElementById('optionDueWordsCount').textContent = dueCount;
+        }
+      } catch (error) {
+        console.error('Error calculating word counts:', error);
+      }
+    }
+
+    // Load words from a specific show with different modes
+    async function loadWordsByShow(showName, season, episode, mode = 'all') {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
@@ -802,13 +827,12 @@ const firebaseConfig = {
 
         if (!words) {
           alert("No words saved yet!");
-          document.getElementById('menuScreen').style.display = 'flex';
-          document.getElementById('showListScreen').style.display = 'none';
+          document.getElementById('showListScreen').style.display = 'flex';
           return;
         }
 
         // Filter words by show
-        currentWords = Object.entries(words)
+        let showWords = Object.entries(words)
           .map(([id, word]) => ({ id, ...word }))
           .filter(word =>
             word.show === showName &&
@@ -816,15 +840,33 @@ const firebaseConfig = {
             word.episode === episode
           );
 
-        todaysWords = []; // No re-review for show mode
-
-        if (currentWords.length === 0) {
+        if (showWords.length === 0) {
           alert(`No words found for ${showName} S${season}E${episode}`);
+          document.getElementById('showListScreen').style.display = 'flex';
           return;
         }
 
-        // Hide show list, show review screen
-        document.getElementById('showListScreen').style.display = 'none';
+        // Apply mode filter
+        const now = Date.now();
+        if (mode === 'due') {
+          showWords = showWords.filter(word => !word.mastered && word.nextReview <= now);
+          if (showWords.length === 0) {
+            alert("No words due for review from this show!");
+            document.getElementById('showOptionsScreen').style.display = 'flex';
+            return;
+          }
+        } else if (mode === 'random') {
+          showWords = showWords.sort(() => Math.random() - 0.5).slice(0, Math.min(10, showWords.length));
+        } else if (mode === 'fresh') {
+          showWords = showWords.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).slice(0, 30);
+        }
+        // 'all' mode doesn't filter
+
+        currentWords = showWords;
+        todaysWords = []; // No re-review for show mode
+
+        // Hide show options, show review screen
+        document.getElementById('showOptionsScreen').style.display = 'none';
         document.getElementById('reviewScreen').style.display = 'block';
 
         currentIndex = 0;
