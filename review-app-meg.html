@@ -458,9 +458,13 @@
       <p>Enter your User ID from the extension</p>
       <input type="text" id="userIdInput" placeholder="user_xxxxx"
              style="padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; width: 250px; margin-bottom: 15px;">
+      <p style="margin-top: 15px;">OpenAI API Key (for AI curation)</p>
+      <input type="password" id="apiKeyInput" placeholder="sk-..."
+             style="padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; width: 250px; margin-bottom: 15px;">
       <button class="login-btn" id="loginBtn">Continue</button>
       <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">
-        Find your User ID: Click extension icon → Copy ID
+        Find your User ID: Click extension icon → Copy ID<br>
+        Get API key: <a href="https://platform.openai.com/api-keys" target="_blank" style="color: white;">OpenAI API Keys</a>
       </p>
     </div>
 
@@ -623,15 +627,22 @@ const firebaseConfig = {
     document.getElementById('loginBtn').addEventListener('click', async () => {
       try {
         const userId = document.getElementById('userIdInput').value.trim();
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
 
         if (!userId) {
           alert("Please enter your User ID from the extension");
           return;
         }
 
-        // Store user ID
+        if (!apiKey) {
+          alert("Please enter your OpenAI API key for AI-powered word curation");
+          return;
+        }
+
+        // Store user ID and API key
         currentUserId = userId;
         localStorage.setItem('savedUserId', userId);
+        localStorage.setItem('openaiApiKey', apiKey);
 
         // Show show list screen instead of old menu
         document.getElementById('loginScreen').style.display = 'none';
@@ -885,11 +896,11 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
 
         console.log('📤 Sending request to OpenAI...');
 
-        // Get OpenAI API key from Chrome storage
-        const { CONFIG } = await chrome.storage.local.get('CONFIG');
+        // Get OpenAI API key from localStorage
+        const apiKey = localStorage.getItem('openaiApiKey');
 
-        if (!CONFIG || !CONFIG.OPENAI_API_KEY) {
-          alert('OpenAI API key not found! Please set it in the extension.');
+        if (!apiKey) {
+          alert('OpenAI API key not found! Please log in again and enter your API key.');
           return null;
         }
 
@@ -897,7 +908,7 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${CONFIG.OPENAI_API_KEY}`
+            'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
@@ -1476,14 +1487,21 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
 
     // Initialize
     if (initFirebase()) {
-      // Check if user ID is already saved
+      // Check if user ID and API key are already saved
       const savedUserId = localStorage.getItem('savedUserId');
-      if (savedUserId) {
+      const savedApiKey = localStorage.getItem('openaiApiKey');
+
+      if (savedUserId && savedApiKey) {
+        // Auto-login if both are saved
         currentUserId = savedUserId;
         document.getElementById('userIdInput').value = savedUserId;
+        document.getElementById('apiKeyInput').value = savedApiKey;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('showListScreen').style.display = 'flex';
         loadShowList();
+      } else if (savedUserId) {
+        // Pre-fill user ID but show login screen for API key
+        document.getElementById('userIdInput').value = savedUserId;
       }
     }
   </script>
