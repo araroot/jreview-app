@@ -599,7 +599,7 @@ const firebaseConfig = {
         localStorage.setItem('savedUserId', userId);
 
         // Show show list screen instead of old menu
-        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('showListScreen').style.display = 'flex';
 
         // Load show list and word counts
@@ -1216,7 +1216,7 @@ const firebaseConfig = {
       if (savedUserId) {
         currentUserId = savedUserId;
         document.getElementById('userIdInput').value = savedUserId;
-        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('showListScreen').style.display = 'flex';
         loadShowList();
       }
