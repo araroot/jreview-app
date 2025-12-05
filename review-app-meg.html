@@ -972,11 +972,6 @@ const firebaseConfig = {
       deleteCurrentWord();
     });
 
-    document.getElementById('deleteBtnBack').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteCurrentWord();
-    });
-
     async function deleteCurrentWord() {
       const word = currentWords[currentIndex];
 
