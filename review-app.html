@@ -1457,27 +1457,54 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     }
 
-    // Continue button - return to show list after session summary
-    document.getElementById('continueBtn').addEventListener('click', (e) => {
+    // Continue button handler function
+    function handleContinueClick(e) {
       console.log('✅ Continue button clicked');
-      e.preventDefault();
-      e.stopPropagation();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
 
-      const completionScreen = document.getElementById('completionScreen');
-      const showListScreen = document.getElementById('showListScreen');
+      try {
+        const completionScreen = document.getElementById('completionScreen');
+        const showListScreen = document.getElementById('showListScreen');
 
-      // Explicitly hide completion screen (Safari compatibility)
-      completionScreen.classList.remove('active');
-      completionScreen.style.display = 'none';
+        console.log('Completion screen element:', completionScreen);
+        console.log('Show list screen element:', showListScreen);
 
-      // Explicitly show show list screen
-      showListScreen.style.display = 'flex';
+        if (!completionScreen || !showListScreen) {
+          console.error('❌ Screen elements not found!');
+          alert('Error: Unable to navigate. Please refresh the page.');
+          return;
+        }
 
-      console.log('✅ Navigating to show list');
+        // Explicitly hide completion screen (Safari compatibility)
+        completionScreen.classList.remove('active');
+        completionScreen.style.display = 'none';
 
-      // Reload show list to refresh counts
-      loadShowList();
-    });
+        // Explicitly show show list screen
+        showListScreen.style.display = 'flex';
+
+        console.log('✅ Navigating to show list');
+
+        // Reload show list to refresh counts
+        loadShowList();
+      } catch (error) {
+        console.error('❌ Error in handleContinueClick:', error);
+        alert('Navigation error: ' + error.message);
+      }
+    }
+
+    // Continue button - return to show list after session summary
+    const continueBtn = document.getElementById('continueBtn');
+    if (continueBtn) {
+      console.log('✅ Continue button found, attaching listeners');
+      // Attach both click and touchend for iOS compatibility
+      continueBtn.addEventListener('click', handleContinueClick);
+      continueBtn.addEventListener('touchend', handleContinueClick);
+    } else {
+      console.error('❌ Continue button not found in DOM!');
+    }
 
     // Initialize
     if (initFirebase()) {
