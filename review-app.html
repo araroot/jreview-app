@@ -475,11 +475,10 @@
     <!-- Show Options Screen -->
     <div class="login-screen" id="showOptionsScreen" style="display: none;">
       <h2 id="showOptionsTitle">📺 Show Name</h2>
-      <p style="margin-bottom: 30px; font-size: 14px;">How do you want to review?</p>
-      <button class="login-btn" id="optionAllWords" style="margin-bottom: 15px;">📚 All Words (<span id="optionAllWordsCount">0</span>)</button>
-      <button class="login-btn" id="optionDueWords" style="margin-bottom: 15px;">📅 Due Words (<span id="optionDueWordsCount">0</span>)</button>
-      <button class="login-btn" id="optionRandomWords" style="margin-bottom: 15px;">🎲 10 Random Words</button>
-      <button class="login-btn" id="optionFreshWords" style="margin-bottom: 15px;">✨ Latest 30 Words</button>
+      <p style="margin-bottom: 20px; font-size: 14px;">Smart practice sessions tailored to your level</p>
+      <p style="margin-bottom: 30px; font-size: 13px; opacity: 0.8;">Words chosen based on frequency, difficulty, and context quality</p>
+      <button class="login-btn" id="optionSmart20" style="margin-bottom: 15px; background: linear-gradient(135deg, #3b82f6, #2563eb);">🎯 Practice 20 Words</button>
+      <button class="login-btn" id="optionSmart50" style="margin-bottom: 15px; background: linear-gradient(135deg, #8b5cf6, #7c3aed);">🚀 Practice 50 Words</button>
       <button class="login-btn" id="backToShowsBtn" style="margin-top: 10px; background: rgba(255,255,255,0.2);">← Back to Shows</button>
     </div>
 
@@ -626,29 +625,17 @@ const firebaseConfig = {
       document.getElementById('showListScreen').style.display = 'flex';
     });
 
-    // Show options handlers
-    document.getElementById('optionAllWords').addEventListener('click', async () => {
+    // Show options handlers - Smart practice
+    document.getElementById('optionSmart20').addEventListener('click', async () => {
       if (!selectedShow) return;
       document.getElementById('showOptionsScreen').style.display = 'none';
-      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'all');
+      await loadSmartPractice(selectedShow.name, selectedShow.season, selectedShow.episode, 20);
     });
 
-    document.getElementById('optionDueWords').addEventListener('click', async () => {
+    document.getElementById('optionSmart50').addEventListener('click', async () => {
       if (!selectedShow) return;
       document.getElementById('showOptionsScreen').style.display = 'none';
-      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'due');
-    });
-
-    document.getElementById('optionRandomWords').addEventListener('click', async () => {
-      if (!selectedShow) return;
-      document.getElementById('showOptionsScreen').style.display = 'none';
-      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'random');
-    });
-
-    document.getElementById('optionFreshWords').addEventListener('click', async () => {
-      if (!selectedShow) return;
-      document.getElementById('showOptionsScreen').style.display = 'none';
-      await loadWordsByShow(selectedShow.name, selectedShow.season, selectedShow.episode, 'fresh');
+      await loadSmartPractice(selectedShow.name, selectedShow.season, selectedShow.episode, 50);
     });
 
     // Load random words
@@ -793,28 +780,134 @@ const firebaseConfig = {
       document.getElementById('showListScreen').style.display = 'none';
       document.getElementById('showOptionsScreen').style.display = 'flex';
       document.getElementById('showOptionsTitle').textContent = `📺 ${show.name} S${show.season}E${show.episode}`;
+    }
 
-      // Calculate word counts for this show
+    // Smart Practice: Curate words based on user's level and context quality
+    async function loadSmartPractice(showName, season, episode, count) {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
-        const words = await response.json();
+        const allWords = await response.json();
 
-        if (words) {
-          const showWords = Object.values(words).filter(word =>
-            word.show === show.name &&
-            word.season === show.season &&
-            word.episode === show.episode
-          );
-
-          const now = Date.now();
-          const dueCount = showWords.filter(word => !word.mastered && word.nextReview <= now).length;
-
-          document.getElementById('optionAllWordsCount').textContent = showWords.length;
-          document.getElementById('optionDueWordsCount').textContent = dueCount;
+        if (!allWords) {
+          alert("No words saved yet!");
+          document.getElementById('showListScreen').style.display = 'flex';
+          return;
         }
+
+        // Get all words from all shows to build knowledge base
+        const allWordsArray = Object.entries(allWords).map(([id, word]) => ({ id, ...word }));
+
+        // Build "known words" set from words marked Easy
+        const knownWords = new Set();
+        allWordsArray.forEach(word => {
+          if (word.reviewCount > 0) {
+            // If marked Easy (interval > 5 days) or mastered
+            const daysSinceReview = (Date.now() - (word.lastReviewed || 0)) / (1000 * 60 * 60 * 24);
+            const intervalDays = (word.nextReview - (word.lastReviewed || 0)) / (1000 * 60 * 60 * 24);
+            if (intervalDays > 5 || word.mastered) {
+              knownWords.add(word.word);
+            }
+          }
+        });
+
+        console.log(`📚 Known words: ${knownWords.size}`);
+
+        // Filter words from this specific show
+        const showWords = allWordsArray.filter(word =>
+          word.show === showName &&
+          word.season === season &&
+          word.episode === episode &&
+          !word.mastered // Don't include mastered words
+        );
+
+        if (showWords.length === 0) {
+          alert(`No words found for ${showName} S${season}E${episode}`);
+          document.getElementById('showListScreen').style.display = 'flex';
+          return;
+        }
+
+        // Score each word
+        const scoredWords = showWords.map(word => {
+          let score = 0;
+
+          // 1. Context Quality Score (most important!)
+          const context = word.context || '';
+          const contextWords = context.match(/[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff]+/g) || [];
+          const unknownInContext = contextWords.filter(w => !knownWords.has(w) && w !== word.word).length;
+
+          // Only include if context has ≤2 unknown words (critical filter)
+          if (unknownInContext > 2) {
+            return null; // Filter out
+          }
+
+          // Bonus for good context (0-1 unknown words)
+          if (unknownInContext === 0) score += 30;
+          else if (unknownInContext === 1) score += 20;
+          else if (unknownInContext === 2) score += 10;
+
+          // 2. Difficulty Score (based on review history)
+          if (word.reviewCount === 0) {
+            // New word - medium priority
+            score += 15;
+          } else if (word.reviewCount === 1) {
+            // Seen once - need more practice
+            score += 20;
+          } else if (word.reviewCount >= 2 && word.reviewCount <= 4) {
+            // Multiple reviews - at your level
+            score += 25;
+          } else {
+            // Many reviews - probably struggling or easy
+            score += 10;
+          }
+
+          // 3. Frequency Score (appears in multiple contexts = useful)
+          const frequency = allWordsArray.filter(w => w.word === word.word).length;
+          if (frequency >= 3) score += 15;
+          else if (frequency === 2) score += 10;
+          else score += 5;
+
+          // 4. Recency penalty (recently reviewed = too easy right now)
+          const daysSince = (Date.now() - (word.lastReviewed || 0)) / (1000 * 60 * 60 * 24);
+          if (daysSince < 1) score -= 10;
+
+          // 5. Context sentence exists and contains the word
+          if (context && context.includes(word.word)) {
+            score += 10;
+          }
+
+          return { ...word, score, unknownInContext };
+        }).filter(w => w !== null); // Remove filtered words
+
+        if (scoredWords.length === 0) {
+          alert("No suitable words found! Try a show with simpler vocabulary or review more words to build your knowledge base.");
+          document.getElementById('showOptionsScreen').style.display = 'flex';
+          return;
+        }
+
+        // Sort by score (highest first) and take top N
+        scoredWords.sort((a, b) => b.score - a.score);
+        const selectedWords = scoredWords.slice(0, Math.min(count, scoredWords.length));
+
+        console.log(`🎯 Selected ${selectedWords.length} words with scores:`,
+          selectedWords.map(w => `${w.word}(${w.score})`).slice(0, 10));
+
+        // Load into review session
+        currentWords = selectedWords;
+        todaysWords = [];
+
+        document.getElementById('showOptionsScreen').style.display = 'none';
+        document.getElementById('reviewScreen').style.display = 'block';
+
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+        showCurrentCard();
+
       } catch (error) {
-        console.error('Error calculating word counts:', error);
+        console.error("Error in smart practice:", error);
+        alert("Error: " + error.message);
       }
     }
 
