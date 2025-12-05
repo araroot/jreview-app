@@ -925,9 +925,18 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
         }
 
         const data = await response.json();
-        const aiResponse = data.choices[0].message.content.trim();
+        let aiResponse = data.choices[0].message.content.trim();
 
         console.log('📥 AI Response:', aiResponse);
+
+        // Strip markdown code fences if present
+        if (aiResponse.startsWith('```json')) {
+          aiResponse = aiResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
+        } else if (aiResponse.startsWith('```')) {
+          aiResponse = aiResponse.replace(/^```\n/, '').replace(/\n```$/, '');
+        }
+
+        console.log('📥 Cleaned response:', aiResponse);
 
         // Parse AI response
         const rankedWordNames = JSON.parse(aiResponse);
