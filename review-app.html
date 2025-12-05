@@ -1038,10 +1038,12 @@ const firebaseConfig = {
     // Show current flashcard
     function showCurrentCard() {
       if (currentIndex >= currentWords.length) {
-        // Completed!
+        // Completed! Return to show list
         document.getElementById('reviewScreen').style.display = 'none';
-        document.getElementById('completionScreen').classList.add('active');
+        document.getElementById('showListScreen').style.display = 'flex';
         updateStats();
+        // Reload show list to refresh counts
+        loadShowList();
         return;
       }
 
