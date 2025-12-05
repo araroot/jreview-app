@@ -157,8 +157,8 @@
       position: absolute;
       top: 15px;
       right: 15px;
-      background: #ef4444;
-      color: white;
+      background: transparent;
+      color: #9ca3af;
       border: none;
       border-radius: 50%;
       width: 36px;
@@ -170,10 +170,11 @@
       justify-content: center;
       transition: all 0.2s ease;
       z-index: 10;
+      opacity: 0.6;
     }
 
     .delete-btn:hover {
-      background: #dc2626;
+      opacity: 1;
       transform: scale(1.1);
     }
 
@@ -515,7 +516,7 @@
             <div class="action-buttons">
               <button class="btn btn-hard" id="btnHard">🔄 Hard</button>
               <button class="btn btn-good" id="btnGood">✓ Good</button>
-              <button class="btn btn-easy" id="btnEasy">✅ Easy</button>
+              <button class="btn btn-easy" id="btnEasy">✓✓ Easy</button>
             </div>
           </div>
         </div>
