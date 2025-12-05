@@ -452,7 +452,16 @@
       <p style="margin-bottom: 30px;">What would you like to practice today?</p>
       <button class="login-btn" id="menuDueWords" style="margin-bottom: 15px;">📅 Today's Due Words (<span id="menuDueCount">0</span>)</button>
       <button class="login-btn" id="menuRandomWords" style="margin-bottom: 15px;">🎲 10 Random Words</button>
-      <button class="login-btn" id="menuFreshWords">✨ Fresh Words (Last 30)</button>
+      <button class="login-btn" id="menuFreshWords" style="margin-bottom: 15px;">✨ Fresh Words (Last 30)</button>
+      <button class="login-btn" id="menuShowList" style="margin-bottom: 15px;">📺 Review by Show</button>
+    </div>
+
+    <!-- Show List Screen -->
+    <div class="login-screen" id="showListScreen" style="display: none;">
+      <h2>Choose a Show 📺</h2>
+      <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
+      <div id="showList" style="max-height: 400px; overflow-y: auto;"></div>
+      <button class="login-btn" id="backToMenuBtn" style="margin-top: 20px;">← Back to Menu</button>
     </div>
 
     <!-- Review Screen -->
@@ -627,6 +636,19 @@ const firebaseConfig = {
       await loadFreshWords();
     });
 
+    // Menu button: Show List
+    document.getElementById('menuShowList').addEventListener('click', async () => {
+      document.getElementById('menuScreen').style.display = 'none';
+      document.getElementById('showListScreen').style.display = 'flex';
+      await loadShowList();
+    });
+
+    // Back to menu from show list
+    document.getElementById('backToMenuBtn').addEventListener('click', () => {
+      document.getElementById('showListScreen').style.display = 'none';
+      document.getElementById('menuScreen').style.display = 'flex';
+    });
+
     // Load random words
     async function loadRandomWords() {
       try {
@@ -696,6 +718,106 @@ const firebaseConfig = {
         showCurrentCard();
       } catch (error) {
         console.error("Error loading fresh words:", error);
+        alert("Error: " + error.message);
+      }
+    }
+
+    // Load show list with word counts
+    async function loadShowList() {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          document.getElementById('showList').innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No words saved yet! Start watching dramas!</p>';
+          return;
+        }
+
+        // Group words by show
+        const showMap = {};
+        Object.values(words).forEach(word => {
+          if (word.show) {
+            const key = `${word.show}_S${word.season}E${word.episode}`;
+            if (!showMap[key]) {
+              showMap[key] = {
+                name: word.show,
+                season: word.season,
+                episode: word.episode,
+                count: 0
+              };
+            }
+            showMap[key].count++;
+          }
+        });
+
+        // Display show list
+        const showListEl = document.getElementById('showList');
+        showListEl.innerHTML = '';
+
+        const shows = Object.values(showMap).sort((a, b) => b.count - a.count);
+
+        if (shows.length === 0) {
+          showListEl.innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No shows tagged yet! Set your current show in the extension popup.</p>';
+          return;
+        }
+
+        shows.forEach(show => {
+          const btn = document.createElement('button');
+          btn.className = 'login-btn';
+          btn.style.marginBottom = '10px';
+          btn.style.width = '100%';
+          btn.textContent = `${show.name} S${show.season}E${show.episode} (${show.count} words)`;
+          btn.addEventListener('click', () => loadWordsByShow(show.name, show.season, show.episode));
+          showListEl.appendChild(btn);
+        });
+      } catch (error) {
+        console.error('Error loading show list:', error);
+        alert('Error loading shows: ' + error.message);
+      }
+    }
+
+    // Load words from a specific show
+    async function loadWordsByShow(showName, season, episode) {
+      try {
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const words = await response.json();
+
+        if (!words) {
+          alert("No words saved yet!");
+          document.getElementById('menuScreen').style.display = 'flex';
+          document.getElementById('showListScreen').style.display = 'none';
+          return;
+        }
+
+        // Filter words by show
+        currentWords = Object.entries(words)
+          .map(([id, word]) => ({ id, ...word }))
+          .filter(word =>
+            word.show === showName &&
+            word.season === season &&
+            word.episode === episode
+          );
+
+        todaysWords = []; // No re-review for show mode
+
+        if (currentWords.length === 0) {
+          alert(`No words found for ${showName} S${season}E${episode}`);
+          return;
+        }
+
+        // Hide show list, show review screen
+        document.getElementById('showListScreen').style.display = 'none';
+        document.getElementById('reviewScreen').style.display = 'block';
+
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+        showCurrentCard();
+      } catch (error) {
+        console.error("Error loading words by show:", error);
         alert("Error: " + error.message);
       }
     }
