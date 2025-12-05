@@ -1219,8 +1219,8 @@ const firebaseConfig = {
         currentUserId = savedUserId;
         document.getElementById('userIdInput').value = savedUserId;
         document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('menuScreen').style.display = 'flex';
-        updateMenuCounts();
+        document.getElementById('showListScreen').style.display = 'flex';
+        loadShowList();
       }
     }
   </script>
