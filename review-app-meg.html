@@ -1245,25 +1245,8 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
           document.getElementById('summaryDeletedContainer').style.display = 'none';
         }
 
-        // RE-ATTACH Continue button listeners (critical for multiple sessions)
-        setTimeout(() => {
-          const continueBtn = document.getElementById('continueBtn');
-          if (continueBtn) {
-            console.log('🔄 Re-attaching Continue button listeners for new session');
-            // Remove old listeners first to avoid duplicates
-            continueBtn.replaceWith(continueBtn.cloneNode(true));
-            const freshBtn = document.getElementById('continueBtn');
-
-            freshBtn.addEventListener('click', window.handleContinue);
-            freshBtn.addEventListener('touchend', (e) => {
-              e.preventDefault();
-              window.handleContinue();
-            });
-            console.log('✅ Continue button listeners re-attached');
-          } else {
-            console.error('❌ Continue button not found when trying to re-attach!');
-          }
-        }, 50);
+        // Continue button already has inline onclick, just log
+        console.log('✅ Session complete screen shown - Continue button ready with inline onclick');
 
         updateStats();
         return;
@@ -1536,58 +1519,59 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
 
     // Continue button handler function (global for onclick compatibility)
     window.handleContinue = function() {
-      console.log('🔘 Continue button clicked (via onclick)');
+      console.log('🔘 Continue button clicked');
 
       try {
-        const completionScreen = document.getElementById('completionScreen');
+        // Get all screen elements
+        const loginScreen = document.getElementById('loginScreen');
         const showListScreen = document.getElementById('showListScreen');
+        const showOptionsScreen = document.getElementById('showOptionsScreen');
+        const reviewScreen = document.getElementById('reviewScreen');
+        const completionScreen = document.getElementById('completionScreen');
 
-        console.log('📱 Completion screen:', completionScreen, 'display:', completionScreen?.style.display);
-        console.log('📱 Show list screen:', showListScreen, 'display:', showListScreen?.style.display);
-
-        if (!completionScreen || !showListScreen) {
-          console.error('❌ Screen elements not found!');
-          alert('Error: Screen elements missing. Please refresh the page.');
-          return;
+        console.log('🔄 Hiding ALL screens first...');
+        // HIDE ALL SCREENS first
+        if (loginScreen) {
+          loginScreen.style.display = 'none';
+          loginScreen.style.visibility = 'hidden';
+        }
+        if (showOptionsScreen) {
+          showOptionsScreen.style.display = 'none';
+          showOptionsScreen.style.visibility = 'hidden';
+        }
+        if (reviewScreen) {
+          reviewScreen.style.display = 'none';
+          reviewScreen.style.visibility = 'hidden';
+        }
+        if (completionScreen) {
+          completionScreen.classList.remove('active');
+          completionScreen.style.display = 'none';
+          completionScreen.style.visibility = 'hidden';
         }
 
-        console.log('🔄 Hiding completion screen...');
-        // Explicitly hide completion screen (multiple methods for iOS)
-        completionScreen.classList.remove('active');
-        completionScreen.style.display = 'none';
-        completionScreen.style.visibility = 'hidden';
+        console.log('🔄 Now showing ONLY show list screen...');
+        // SHOW ONLY show list screen
+        if (showListScreen) {
+          showListScreen.style.display = 'flex';
+          showListScreen.style.visibility = 'visible';
+          showListScreen.style.opacity = '1';
 
-        console.log('🔄 Showing show list screen...');
-        // Explicitly show show list screen
-        showListScreen.style.display = 'flex';
-        showListScreen.style.visibility = 'visible';
+          // Reload show list to refresh counts
+          loadShowList();
 
-        console.log('✅ Navigation complete, reloading show list');
-
-        // Reload show list to refresh counts
-        loadShowList();
-
-        alert('Navigated back to show list!'); // Temporary debug alert
+          console.log('✅ Navigation complete - show list should be visible now');
+        } else {
+          console.error('❌ Show list screen not found!');
+          alert('Error: Could not find show list screen. Please refresh the page.');
+        }
       } catch (error) {
         console.error('❌ Error in handleContinue:', error);
-        alert('Navigation error: ' + error.message + '\n\nStack: ' + error.stack);
+        alert('Navigation error: ' + error.message);
       }
     };
 
-    // Also attach via event listener as backup
-    setTimeout(() => {
-      const continueBtn = document.getElementById('continueBtn');
-      if (continueBtn) {
-        console.log('✅ Continue button found, attaching listeners');
-        continueBtn.addEventListener('click', window.handleContinue);
-        continueBtn.addEventListener('touchend', (e) => {
-          e.preventDefault();
-          window.handleContinue();
-        });
-      } else {
-        console.error('❌ Continue button not found in DOM!');
-      }
-    }, 100);
+    // Note: Continue button uses inline onclick="window.handleContinue()" for maximum compatibility
+    console.log('✅ Continue button handler registered - will be triggered via inline onclick');
 
     // Helper function to get cookie value
     function getCookie(name) {
