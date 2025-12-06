@@ -640,8 +640,25 @@ const firebaseConfig = {
 
         // Store user ID and API key
         currentUserId = userId;
-        localStorage.setItem('savedUserId', userId);
-        localStorage.setItem('openaiApiKey', apiKey);
+
+        try {
+          localStorage.setItem('savedUserId', userId);
+          localStorage.setItem('openaiApiKey', apiKey);
+          console.log('✅ Saved to localStorage:', { userId, apiKeyLength: apiKey.length });
+
+          // Verify it was saved
+          const savedUserId = localStorage.getItem('savedUserId');
+          const savedApiKey = localStorage.getItem('openaiApiKey');
+          console.log('✅ Verified localStorage:', { savedUserId, savedApiKeyLength: savedApiKey?.length });
+
+          if (!savedUserId || !savedApiKey) {
+            console.error('❌ localStorage save failed! Check iOS settings.');
+            alert('Warning: Unable to save login info. You may need to disable "Prevent Cross-Site Tracking" in Safari settings.');
+          }
+        } catch (e) {
+          console.error('❌ localStorage error:', e);
+          alert('Warning: Unable to save login info. iOS Privacy settings may be blocking storage.');
+        }
 
         // Show show list screen instead of old menu
         document.getElementById('loginScreen').style.display = 'none';
@@ -1509,20 +1526,37 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
     // Initialize
     if (initFirebase()) {
       // Check if user ID and API key are already saved
-      const savedUserId = localStorage.getItem('savedUserId');
-      const savedApiKey = localStorage.getItem('openaiApiKey');
+      console.log('🔍 Checking localStorage for saved credentials...');
 
-      if (savedUserId && savedApiKey) {
-        // Auto-login if both are saved
-        currentUserId = savedUserId;
-        document.getElementById('userIdInput').value = savedUserId;
-        document.getElementById('apiKeyInput').value = savedApiKey;
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('showListScreen').style.display = 'flex';
-        loadShowList();
-      } else if (savedUserId) {
-        // Pre-fill user ID but show login screen for API key
-        document.getElementById('userIdInput').value = savedUserId;
+      try {
+        const savedUserId = localStorage.getItem('savedUserId');
+        const savedApiKey = localStorage.getItem('openaiApiKey');
+
+        console.log('📦 localStorage contents:', {
+          savedUserId: savedUserId || 'null',
+          savedApiKeyLength: savedApiKey?.length || 0,
+          localStorageAvailable: typeof(Storage) !== 'undefined'
+        });
+
+        if (savedUserId && savedApiKey) {
+          // Auto-login if both are saved
+          console.log('✅ Auto-login with saved credentials');
+          currentUserId = savedUserId;
+          document.getElementById('userIdInput').value = savedUserId;
+          document.getElementById('apiKeyInput').value = savedApiKey;
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('showListScreen').style.display = 'flex';
+          loadShowList();
+        } else if (savedUserId) {
+          // Pre-fill user ID but show login screen for API key
+          console.log('⚠️ Only User ID saved, showing login screen');
+          document.getElementById('userIdInput').value = savedUserId;
+        } else {
+          console.log('ℹ️ No saved credentials, showing login screen');
+        }
+      } catch (e) {
+        console.error('❌ Error accessing localStorage:', e);
+        alert('Warning: Unable to access saved login info. iOS may be blocking storage.');
       }
     }
   </script>
