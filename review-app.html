@@ -568,7 +568,7 @@
         • AI considers your progress (Easy/Good/Hard history)<br>
         • Deleted words help AI understand what's not useful for you
       </div>
-      <button type="button" class="btn btn-good" id="continueBtn" style="padding: 15px 40px;">Continue →</button>
+      <button type="button" class="btn btn-good" id="continueBtn" onclick="window.handleContinue && window.handleContinue()" style="padding: 15px 40px; cursor: pointer; -webkit-tap-highlight-color: rgba(0,0,0,0.2); z-index: 9999; position: relative;">Continue →</button>
     </div>
   </div>
 
@@ -1485,54 +1485,60 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     }
 
-    // Continue button handler function
-    function handleContinueClick(e) {
-      console.log('✅ Continue button clicked');
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+    // Continue button handler function (global for onclick compatibility)
+    window.handleContinue = function() {
+      console.log('🔘 Continue button clicked (via onclick)');
 
       try {
         const completionScreen = document.getElementById('completionScreen');
         const showListScreen = document.getElementById('showListScreen');
 
-        console.log('Completion screen element:', completionScreen);
-        console.log('Show list screen element:', showListScreen);
+        console.log('📱 Completion screen:', completionScreen, 'display:', completionScreen?.style.display);
+        console.log('📱 Show list screen:', showListScreen, 'display:', showListScreen?.style.display);
 
         if (!completionScreen || !showListScreen) {
           console.error('❌ Screen elements not found!');
-          alert('Error: Unable to navigate. Please refresh the page.');
+          alert('Error: Screen elements missing. Please refresh the page.');
           return;
         }
 
-        // Explicitly hide completion screen (Safari compatibility)
+        console.log('🔄 Hiding completion screen...');
+        // Explicitly hide completion screen (multiple methods for iOS)
         completionScreen.classList.remove('active');
         completionScreen.style.display = 'none';
+        completionScreen.style.visibility = 'hidden';
 
+        console.log('🔄 Showing show list screen...');
         // Explicitly show show list screen
         showListScreen.style.display = 'flex';
+        showListScreen.style.visibility = 'visible';
 
-        console.log('✅ Navigating to show list');
+        console.log('✅ Navigation complete, reloading show list');
 
         // Reload show list to refresh counts
         loadShowList();
-      } catch (error) {
-        console.error('❌ Error in handleContinueClick:', error);
-        alert('Navigation error: ' + error.message);
-      }
-    }
 
-    // Continue button - return to show list after session summary
-    const continueBtn = document.getElementById('continueBtn');
-    if (continueBtn) {
-      console.log('✅ Continue button found, attaching listeners');
-      // Attach both click and touchend for iOS compatibility
-      continueBtn.addEventListener('click', handleContinueClick);
-      continueBtn.addEventListener('touchend', handleContinueClick);
-    } else {
-      console.error('❌ Continue button not found in DOM!');
-    }
+        alert('Navigated back to show list!'); // Temporary debug alert
+      } catch (error) {
+        console.error('❌ Error in handleContinue:', error);
+        alert('Navigation error: ' + error.message + '\n\nStack: ' + error.stack);
+      }
+    };
+
+    // Also attach via event listener as backup
+    setTimeout(() => {
+      const continueBtn = document.getElementById('continueBtn');
+      if (continueBtn) {
+        console.log('✅ Continue button found, attaching listeners');
+        continueBtn.addEventListener('click', window.handleContinue);
+        continueBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          window.handleContinue();
+        });
+      } else {
+        console.error('❌ Continue button not found in DOM!');
+      }
+    }, 100);
 
     // Helper function to get cookie value
     function getCookie(name) {
