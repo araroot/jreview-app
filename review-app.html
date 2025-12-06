@@ -641,6 +641,9 @@ const firebaseConfig = {
         // Store user ID and API key
         currentUserId = userId;
 
+        // Try localStorage first, fall back to cookies
+        let storageSuccess = false;
+
         try {
           localStorage.setItem('savedUserId', userId);
           localStorage.setItem('openaiApiKey', apiKey);
@@ -649,15 +652,23 @@ const firebaseConfig = {
           // Verify it was saved
           const savedUserId = localStorage.getItem('savedUserId');
           const savedApiKey = localStorage.getItem('openaiApiKey');
-          console.log('✅ Verified localStorage:', { savedUserId, savedApiKeyLength: savedApiKey?.length });
 
-          if (!savedUserId || !savedApiKey) {
-            console.error('❌ localStorage save failed! Check iOS settings.');
-            alert('Warning: Unable to save login info. You may need to disable "Prevent Cross-Site Tracking" in Safari settings.');
+          if (savedUserId && savedApiKey) {
+            console.log('✅ Verified localStorage works');
+            storageSuccess = true;
           }
         } catch (e) {
-          console.error('❌ localStorage error:', e);
-          alert('Warning: Unable to save login info. iOS Privacy settings may be blocking storage.');
+          console.error('❌ localStorage blocked:', e);
+        }
+
+        // If localStorage failed, use cookies as fallback
+        if (!storageSuccess) {
+          console.log('📝 Using cookies as fallback...');
+          document.cookie = `savedUserId=${encodeURIComponent(userId)}; max-age=31536000; path=/; SameSite=Lax`;
+          document.cookie = `openaiApiKey=${encodeURIComponent(apiKey)}; max-age=31536000; path=/; SameSite=Lax`;
+          console.log('✅ Saved to cookies');
+
+          alert('Note: Using cookies to remember your login (localStorage is blocked). For best results, add this app to your home screen!');
         }
 
         // Show show list screen instead of old menu
@@ -1523,40 +1534,53 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       console.error('❌ Continue button not found in DOM!');
     }
 
+    // Helper function to get cookie value
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+      return null;
+    }
+
     // Initialize
     if (initFirebase()) {
       // Check if user ID and API key are already saved
-      console.log('🔍 Checking localStorage for saved credentials...');
+      console.log('🔍 Checking for saved credentials...');
 
+      let savedUserId = null;
+      let savedApiKey = null;
+
+      // Try localStorage first
       try {
-        const savedUserId = localStorage.getItem('savedUserId');
-        const savedApiKey = localStorage.getItem('openaiApiKey');
-
-        console.log('📦 localStorage contents:', {
-          savedUserId: savedUserId || 'null',
-          savedApiKeyLength: savedApiKey?.length || 0,
-          localStorageAvailable: typeof(Storage) !== 'undefined'
-        });
-
-        if (savedUserId && savedApiKey) {
-          // Auto-login if both are saved
-          console.log('✅ Auto-login with saved credentials');
-          currentUserId = savedUserId;
-          document.getElementById('userIdInput').value = savedUserId;
-          document.getElementById('apiKeyInput').value = savedApiKey;
-          document.getElementById('loginScreen').style.display = 'none';
-          document.getElementById('showListScreen').style.display = 'flex';
-          loadShowList();
-        } else if (savedUserId) {
-          // Pre-fill user ID but show login screen for API key
-          console.log('⚠️ Only User ID saved, showing login screen');
-          document.getElementById('userIdInput').value = savedUserId;
-        } else {
-          console.log('ℹ️ No saved credentials, showing login screen');
-        }
+        savedUserId = localStorage.getItem('savedUserId');
+        savedApiKey = localStorage.getItem('openaiApiKey');
+        console.log('📦 localStorage:', { savedUserId: savedUserId || 'null', savedApiKeyLength: savedApiKey?.length || 0 });
       } catch (e) {
-        console.error('❌ Error accessing localStorage:', e);
-        alert('Warning: Unable to access saved login info. iOS may be blocking storage.');
+        console.error('❌ localStorage blocked:', e);
+      }
+
+      // Fall back to cookies if localStorage didn't work
+      if (!savedUserId || !savedApiKey) {
+        savedUserId = getCookie('savedUserId');
+        savedApiKey = getCookie('openaiApiKey');
+        console.log('🍪 cookies:', { savedUserId: savedUserId || 'null', savedApiKeyLength: savedApiKey?.length || 0 });
+      }
+
+      if (savedUserId && savedApiKey) {
+        // Auto-login if both are saved
+        console.log('✅ Auto-login with saved credentials');
+        currentUserId = savedUserId;
+        document.getElementById('userIdInput').value = savedUserId;
+        document.getElementById('apiKeyInput').value = savedApiKey;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('showListScreen').style.display = 'flex';
+        loadShowList();
+      } else if (savedUserId) {
+        // Pre-fill user ID but show login screen for API key
+        console.log('⚠️ Only User ID saved, showing login screen');
+        document.getElementById('userIdInput').value = savedUserId;
+      } else {
+        console.log('ℹ️ No saved credentials, showing login screen');
       }
     }
   </script>
