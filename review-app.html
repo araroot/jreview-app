@@ -7,15 +7,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="日本語">
 
-  <!-- Icons for iOS -->
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 
-  <!-- Icons for Android/PWA -->
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 
-  <!-- PWA Manifest -->
   <link rel="manifest" href="manifest-review.json">
 
   <title>Japanese Vocabulary Review</title>
@@ -452,7 +449,6 @@
   </div>
 
   <div class="main-container">
-    <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
       <h2>Welcome! 👋</h2>
       <p>Enter your User ID from the extension</p>
@@ -468,7 +464,6 @@
       </p>
     </div>
 
-    <!-- Show List Screen (Main Menu) -->
     <div class="login-screen" id="showListScreen" style="display: none;">
       <h2>Choose a Show 📺</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
@@ -476,7 +471,6 @@
       <div id="showList" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;"></div>
     </div>
 
-    <!-- Show Options Screen -->
     <div class="login-screen" id="showOptionsScreen" style="display: none;">
       <h2 id="showOptionsTitle">📺 Show Name</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Smart practice sessions tailored to your level</p>
@@ -486,7 +480,6 @@
       <button class="login-btn" id="backToShowsBtn" style="margin-top: 10px; background: rgba(255,255,255,0.2);">← Back to Shows</button>
     </div>
 
-    <!-- Review Screen -->
     <div id="reviewScreen" style="display: none; width: 100%;">
       <div class="progress-bar">
         <div class="progress-fill" id="progressFill" style="width: 0%"></div>
@@ -535,7 +528,6 @@
       </div>
     </div>
 
-    <!-- Session Summary Screen -->
     <div class="completion-screen" id="completionScreen">
       <div class="completion-emoji">🎉</div>
       <div class="completion-title">Session Complete!</div>
@@ -572,32 +564,30 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <script>
-    // Firebase Configuration - USER NEEDS TO ADD THEIR CREDENTIALS
-
-    // Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDQgZ4XKuEbQ6mincj6R8bX6gBH_CUETUY",
-  authDomain: "japanese-learning-app-dc19d.firebaseapp.com",
-  databaseURL: "https://japanese-learning-app-dc19d-default-rtdb.firebaseio.com",
-  projectId: "japanese-learning-app-dc19d",
-  storageBucket: "japanese-learning-app-dc19d.firebasestorage.app",
-  messagingSenderId: "68430245068",
-  appId: "1:68430245068:web:c40f7e0a6717f054b4a669"
-};
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDQgZ4XKuEbQ6mincj6R8bX6gBH_CUETUY",
+      authDomain: "japanese-learning-app-dc19d.firebaseapp.com",
+      databaseURL: "https://japanese-learning-app-dc19d-default-rtdb.firebaseio.com",
+      projectId: "japanese-learning-app-dc19d",
+      storageBucket: "japanese-learning-app-dc19d.firebasestorage.app",
+      messagingSenderId: "68430245068",
+      appId: "1:68430245068:web:c40f7e0a6717f054b4a669"
+    };
   
     // Initialize Firebase
     let app, auth, database;
     let currentWords = [];
-    let todaysWords = []; // Store today's due words for re-review
+    let todaysWords = []; 
     let currentIndex = 0;
     let isFlipped = false;
     let reviewedToday = 0;
+    let currentUserId = null;
 
     // Session statistics
     let sessionStats = {
@@ -607,6 +597,47 @@ const firebaseConfig = {
       deleted: 0,
       total: 0
     };
+
+    // --- NEW HELPER: Centralized Screen Switching ---
+    function switchScreen(screenId) {
+        // 1. Hide all screens first
+        const screens = ['loginScreen', 'showListScreen', 'showOptionsScreen', 'reviewScreen', 'completionScreen'];
+        
+        screens.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            
+            // Reset all hiding mechanisms
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.opacity = '0';
+            el.classList.remove('active'); // specific for completion screen
+        });
+
+        // 2. Show the target screen
+        const target = document.getElementById(screenId);
+        if (!target) {
+            console.error(`Target screen ${screenId} not found`);
+            return;
+        }
+
+        // Apply specific display types based on your CSS
+        if (screenId === 'completionScreen') {
+            target.style.display = 'flex';
+            target.classList.add('active');
+        } else if (screenId === 'reviewScreen') {
+            target.style.display = 'block';
+        } else {
+            // Login, ShowList, ShowOptions use flex
+            target.style.display = 'flex';
+        }
+
+        // Make visible
+        target.style.visibility = 'visible';
+        setTimeout(() => { target.style.opacity = '1'; }, 10);
+        
+        console.log(`Switched to: ${screenId}`);
+    }
 
     function initFirebase() {
       try {
@@ -638,183 +669,58 @@ const firebaseConfig = {
           return;
         }
 
-        // Store user ID and API key
         currentUserId = userId;
 
         // Try localStorage first, fall back to cookies
         let storageSuccess = false;
-
         try {
           localStorage.setItem('savedUserId', userId);
           localStorage.setItem('openaiApiKey', apiKey);
-          console.log('✅ Saved to localStorage:', { userId, apiKeyLength: apiKey.length });
-
-          // Verify it was saved
-          const savedUserId = localStorage.getItem('savedUserId');
-          const savedApiKey = localStorage.getItem('openaiApiKey');
-
-          if (savedUserId && savedApiKey) {
-            console.log('✅ Verified localStorage works');
-            storageSuccess = true;
-          }
+          storageSuccess = true;
         } catch (e) {
-          console.error('❌ localStorage blocked:', e);
+          console.error('localStorage blocked:', e);
         }
 
-        // If localStorage failed, use cookies as fallback
         if (!storageSuccess) {
-          console.log('📝 Using cookies as fallback...');
           document.cookie = `savedUserId=${encodeURIComponent(userId)}; max-age=31536000; path=/; SameSite=Lax`;
           document.cookie = `openaiApiKey=${encodeURIComponent(apiKey)}; max-age=31536000; path=/; SameSite=Lax`;
-          console.log('✅ Saved to cookies');
-
-          alert('Note: Using cookies to remember your login (localStorage is blocked). For best results, add this app to your home screen!');
+          alert('Note: Using cookies to remember your login.');
         }
 
-        // Show show list screen instead of old menu
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('showListScreen').style.display = 'flex';
-
-        // Load show list and word counts
+        switchScreen('showListScreen');
         await loadShowList();
+
       } catch (error) {
         console.error("Login error:", error);
         alert("Error: " + error.message);
       }
     });
 
-    // Store selected show for options screen
     let selectedShow = null;
 
-    // Review All Shows button - loads due words across all shows
+    // Review All Shows button
     document.getElementById('reviewAllShows').addEventListener('click', async () => {
-      // Hide show list
-      const showListScreen = document.getElementById('showListScreen');
-      showListScreen.style.display = 'none';
-      showListScreen.style.visibility = 'hidden';
-
-      // Show review screen
-      const reviewScreen = document.getElementById('reviewScreen');
-      reviewScreen.style.display = 'block';
-      reviewScreen.style.visibility = 'visible';
-      reviewScreen.style.opacity = '1';
-
+      switchScreen('reviewScreen');
       await loadWords();
     });
 
     // Back to shows from options
     document.getElementById('backToShowsBtn').addEventListener('click', () => {
-      // Hide options screen
-      const optionsScreen = document.getElementById('showOptionsScreen');
-      optionsScreen.style.display = 'none';
-      optionsScreen.style.visibility = 'hidden';
-
-      // Show show list (reset visibility)
-      const showListScreen = document.getElementById('showListScreen');
-      showListScreen.style.display = 'flex';
-      showListScreen.style.visibility = 'visible';
-      showListScreen.style.opacity = '1';
+      switchScreen('showListScreen');
     });
 
-    // Show options handlers - Smart practice
+    // Show options handlers
     document.getElementById('optionSmart20').addEventListener('click', async () => {
       if (!selectedShow) return;
-      document.getElementById('showOptionsScreen').style.display = 'none';
       await loadSmartPractice(selectedShow.name, selectedShow.season, selectedShow.episode, 20);
     });
 
     document.getElementById('optionSmart50').addEventListener('click', async () => {
       if (!selectedShow) return;
-      document.getElementById('showOptionsScreen').style.display = 'none';
       await loadSmartPractice(selectedShow.name, selectedShow.season, selectedShow.episode, 50);
     });
 
-    // Load random words
-    async function loadRandomWords() {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
-
-        if (!words) {
-          alert("No words saved yet!");
-          document.getElementById('menuScreen').style.display = 'flex';
-          return;
-        }
-
-        const allWords = Object.entries(words).map(([id, word]) => ({ id, ...word }));
-        const shuffled = allWords.sort(() => Math.random() - 0.5);
-        currentWords = shuffled.slice(0, Math.min(10, shuffled.length));
-        todaysWords = []; // No re-review for random mode
-
-        if (currentWords.length === 0) {
-          alert("No words to practice!");
-          document.getElementById('menuScreen').style.display = 'flex';
-          return;
-        }
-
-        currentIndex = 0;
-        reviewedToday = 0;
-        document.getElementById('dueCount').textContent = currentWords.length;
-        document.getElementById('reviewedCount').textContent = 0;
-
-        // Show review screen
-        const reviewScreen = document.getElementById('reviewScreen');
-        reviewScreen.style.display = 'block';
-        reviewScreen.style.visibility = 'visible';
-        reviewScreen.style.opacity = '1';
-
-        showCurrentCard();
-      } catch (error) {
-        console.error("Error loading random words:", error);
-        alert("Error: " + error.message);
-      }
-    }
-
-    // Load fresh words (most recent)
-    async function loadFreshWords() {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
-
-        if (!words) {
-          alert("No words saved yet!");
-          document.getElementById('menuScreen').style.display = 'flex';
-          return;
-        }
-
-        currentWords = Object.entries(words)
-          .map(([id, word]) => ({ id, ...word }))
-          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
-          .slice(0, 30);
-        todaysWords = []; // No re-review for fresh mode
-
-        if (currentWords.length === 0) {
-          alert("No words saved yet!");
-          document.getElementById('menuScreen').style.display = 'flex';
-          return;
-        }
-
-        currentIndex = 0;
-        reviewedToday = 0;
-        document.getElementById('dueCount').textContent = currentWords.length;
-        document.getElementById('reviewedCount').textContent = 0;
-
-        // Show review screen
-        const reviewScreen = document.getElementById('reviewScreen');
-        reviewScreen.style.display = 'block';
-        reviewScreen.style.visibility = 'visible';
-        reviewScreen.style.opacity = '1';
-
-        showCurrentCard();
-      } catch (error) {
-        console.error("Error loading fresh words:", error);
-        alert("Error: " + error.message);
-      }
-    }
-
-    // Load show list with word counts
+    // Load show list
     async function loadShowList() {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
@@ -830,7 +736,7 @@ const firebaseConfig = {
         const allWords = Object.values(words);
         const now = Date.now();
 
-        // Calculate due words count for "Review All Shows" button
+        // Calculate due words
         const dueCount = allWords.filter(word => !word.mastered && word.nextReview <= now).length;
         document.getElementById('allShowsDueCount').textContent = dueCount;
 
@@ -858,7 +764,7 @@ const firebaseConfig = {
         const shows = Object.values(showMap).sort((a, b) => b.count - a.count);
 
         if (shows.length === 0) {
-          showListEl.innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No shows tagged yet! Set your current show in the extension popup.</p>';
+          showListEl.innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No shows tagged yet!</p>';
           return;
         }
 
@@ -873,35 +779,23 @@ const firebaseConfig = {
         });
       } catch (error) {
         console.error('Error loading show list:', error);
-        alert('Error loading shows: ' + error.message);
       }
     }
 
-    // Show options screen for selected show
     async function showOptionsForShow(show) {
       selectedShow = show;
-      // Hide show list
-      document.getElementById('showListScreen').style.display = 'none';
-      document.getElementById('showListScreen').style.visibility = 'hidden';
-
-      // Show options screen (reset both display AND visibility)
-      const optionsScreen = document.getElementById('showOptionsScreen');
-      optionsScreen.style.display = 'flex';
-      optionsScreen.style.visibility = 'visible';
-      optionsScreen.style.opacity = '1';
-
+      switchScreen('showOptionsScreen');
       document.getElementById('showOptionsTitle').textContent = `📺 ${show.name} S${show.season}E${show.episode}`;
     }
 
-    // AI Function: Rank words by real-world commonality and usefulness
+    // AI Ranking Function
     async function rankWordsWithAI(words, knownWords, deletedWords, targetCount) {
       try {
-        // Prepare word data for AI
         const wordData = words.map(word => {
           const context = word.context || '';
           const contextWords = context.match(/[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff]+/g) || [];
           const unknownInContext = contextWords.filter(w => !knownWords.has(w) && w !== word.word).length;
-
+          
           let reviewStatus = 'new';
           if (word.reviewCount >= 5) reviewStatus = 'many reviews';
           else if (word.reviewCount >= 2) reviewStatus = 'reviewed';
@@ -923,296 +817,140 @@ const firebaseConfig = {
           };
         });
 
-        // Build AI prompt
         const prompt = `You are helping an N2-level Japanese learner prioritize vocabulary practice.
 
-LEARNER'S KNOWN VOCABULARY (${knownWords.size} words they marked Easy):
-${Array.from(knownWords).slice(0, 30).join(', ')}${knownWords.size > 30 ? '...' : ''}
+LEARNER'S KNOWN VOCABULARY (${knownWords.size} words):
+${Array.from(knownWords).slice(0, 30).join(', ')}...
 
-DELETED WORDS (learner found these not useful):
+DELETED WORDS:
 ${deletedWords.length > 0 ? deletedWords.join(', ') : 'None'}
 
-AVAILABLE WORDS TO RANK:
+AVAILABLE WORDS:
 ${JSON.stringify(wordData, null, 2)}
 
-TASK: Rank these words by REAL-WORLD COMMONALITY for:
-- Daily conversation in Japanese
-- Japanese dramas/TV shows
-- Practical N2-level usage
+TASK: Rank these words by REAL-WORLD COMMONALITY.
+Return ONLY a JSON array of the top ${targetCount} word objects (just the "word" field).
+["word1", "word2", "word3", ...]`;
 
-RANKING CRITERIA (in priority order):
-1. **High-frequency words**: Common in daily Japanese (conversation, dramas, news)
-2. **Useful expressions**: Likely to appear in multiple contexts
-3. **N2 appropriate**: Not too basic, not too advanced
-4. **Good context quality**: Prefer words with fewer unknowns in their context sentence
-5. **Learning stage**: Prioritize words marked "seen once" or "reviewed" over "new" or "many reviews"
-
-AVOID prioritizing:
-- Rare/literary words only used in formal writing
-- Very specific technical terms
-- Words similar to those in DELETED WORDS list
-
-Return ONLY a JSON array of the top ${targetCount} word objects (just the "word" field), ranked from most to least useful:
-["word1", "word2", "word3", ...]
-
-Return between ${Math.min(targetCount, words.length)} and ${targetCount} words maximum.`;
-
-        console.log('📤 Sending request to OpenAI...');
-
-        // Get OpenAI API key from localStorage
         const apiKey = localStorage.getItem('openaiApiKey');
-
         if (!apiKey) {
-          alert('OpenAI API key not found! Please log in again and enter your API key.');
+          alert('OpenAI API key not found!');
           return null;
         }
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
-            messages: [{
-              role: "user",
-              content: prompt
-            }],
+            messages: [{ role: "user", content: prompt }],
             temperature: 0.3,
             max_tokens: 1000
           })
         });
 
-        if (!response.ok) {
-          console.error('OpenAI API error:', response.status);
-          throw new Error(`OpenAI API request failed: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
 
         const data = await response.json();
         let aiResponse = data.choices[0].message.content.trim();
+        
+        // Clean markdown
+        if (aiResponse.startsWith('```json')) aiResponse = aiResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
+        else if (aiResponse.startsWith('```')) aiResponse = aiResponse.replace(/^```\n/, '').replace(/\n```$/, '');
 
-        console.log('📥 AI Response:', aiResponse);
-
-        // Strip markdown code fences if present
-        if (aiResponse.startsWith('```json')) {
-          aiResponse = aiResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
-        } else if (aiResponse.startsWith('```')) {
-          aiResponse = aiResponse.replace(/^```\n/, '').replace(/\n```$/, '');
-        }
-
-        console.log('📥 Cleaned response:', aiResponse);
-
-        // Parse AI response
         const rankedWordNames = JSON.parse(aiResponse);
-
-        // Map back to full word objects in ranked order
         const rankedWords = rankedWordNames
           .map(wordName => words.find(w => w.word === wordName))
           .filter(w => w !== undefined);
 
-        console.log(`✅ AI ranked ${rankedWords.length} words`);
-
         return rankedWords;
 
       } catch (error) {
-        console.error('❌ Error in AI ranking:', error);
+        console.error('AI ranking error:', error);
         alert('AI ranking failed: ' + error.message);
         return null;
       }
     }
 
-    // AI-Powered Smart Practice: Use OpenAI to rank words by real-world commonality
+    // AI Smart Practice
     async function loadSmartPractice(showName, season, episode, count) {
       try {
-        console.log('🤖 Starting AI-powered smart practice...');
-
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
         const allWords = await response.json();
 
         if (!allWords) {
           alert("No words saved yet!");
-          document.getElementById('showListScreen').style.display = 'flex';
+          switchScreen('showListScreen');
           return;
         }
 
-        // Get all words from all shows to build knowledge base
         const allWordsArray = Object.entries(allWords).map(([id, word]) => ({ id, ...word }));
-
-        // Build "known words" set from words marked Easy
         const knownWords = new Set();
         allWordsArray.forEach(word => {
           if (word.reviewCount > 0) {
-            // If marked Easy (interval > 5 days) or mastered
-            const daysSinceReview = (Date.now() - (word.lastReviewed || 0)) / (1000 * 60 * 60 * 24);
             const intervalDays = (word.nextReview - (word.lastReviewed || 0)) / (1000 * 60 * 60 * 24);
-            if (intervalDays > 5 || word.mastered) {
-              knownWords.add(word.word);
-            }
+            if (intervalDays > 5 || word.mastered) knownWords.add(word.word);
           }
         });
 
-        console.log(`📚 Known words: ${knownWords.size}`);
-
-        // Filter words from this specific show
         const showWords = allWordsArray.filter(word =>
           word.show === showName &&
           word.season === season &&
           word.episode === episode &&
-          !word.mastered // Don't include mastered words
+          !word.mastered
         );
-
-        console.log(`🔍 Total words from show before filtering: ${showWords.length}`);
 
         if (showWords.length === 0) {
           alert(`No words found for ${showName} S${season}E${episode}`);
-          document.getElementById('showListScreen').style.display = 'flex';
+          switchScreen('showListScreen');
           return;
         }
 
-        // Apply 2-hour recency filter first (hard filter)
-        let filteredByRecency = 0;
+        // 2-hour recency filter
         const eligibleWords = showWords.filter(word => {
           const hoursSince = (Date.now() - (word.lastReviewed || 0)) / (1000 * 60 * 60);
-
-          if (hoursSince < 2 && word.lastReviewed) {
-            filteredByRecency++;
-            console.log(`⏰ Filtered out (recently reviewed): ${word.word} (${hoursSince.toFixed(1)}h ago)`);
-            return false;
-          }
-          return true;
+          return !(hoursSince < 2 && word.lastReviewed);
         });
 
-        console.log(`🎯 Filtered ${filteredByRecency} words by recency (< 2 hours)`);
-        console.log(`✅ Eligible words for AI ranking: ${eligibleWords.length}`);
-
         if (eligibleWords.length === 0) {
-          alert("No eligible words found! All words were recently reviewed. Try again in a few hours or select a different show.");
-          document.getElementById('showOptionsScreen').style.display = 'flex';
+          alert("All words were recently reviewed. Try again later.");
+          switchScreen('showOptionsScreen');
           return;
         }
 
-        // Get deleted words for AI context
-        const deletedWordsUrl = `${firebaseConfig.databaseURL}/users/${currentUserId}/deletedWords.json`;
-        const deletedResponse = await fetch(deletedWordsUrl);
-        const deletedWordsData = await deletedResponse.json();
-        const deletedWords = deletedWordsData ? Object.values(deletedWordsData).map(w => w.word) : [];
+        // Get deleted words
+        const deletedUrl = `${firebaseConfig.databaseURL}/users/${currentUserId}/deletedWords.json`;
+        const deletedResponse = await fetch(deletedUrl);
+        const deletedData = await deletedResponse.json();
+        const deletedWords = deletedData ? Object.values(deletedData).map(w => w.word) : [];
 
-        // Call AI to rank words by real-world commonality
-        console.log('🤖 Calling AI to rank words...');
         const rankedWords = await rankWordsWithAI(eligibleWords, knownWords, deletedWords, count);
 
         if (!rankedWords || rankedWords.length === 0) {
-          alert("AI ranking failed. Please try again.");
-          document.getElementById('showOptionsScreen').style.display = 'flex';
+          alert("AI ranking failed.");
+          switchScreen('showOptionsScreen');
           return;
         }
 
-        const selectedWords = rankedWords;
-        console.log(`🎯 AI selected ${selectedWords.length} words:`,
-          selectedWords.map(w => w.word).slice(0, 10));
-
-        // Load into review session
-        currentWords = selectedWords;
+        currentWords = rankedWords;
         todaysWords = [];
-
-        // Hide options screen
-        const optionsScreen = document.getElementById('showOptionsScreen');
-        optionsScreen.style.display = 'none';
-        optionsScreen.style.visibility = 'hidden';
-
-        // Show review screen (RESET VISIBILITY!)
-        const reviewScreen = document.getElementById('reviewScreen');
-        reviewScreen.style.display = 'block';
-        reviewScreen.style.visibility = 'visible';
-        reviewScreen.style.opacity = '1';
-
-        currentIndex = 0;
-        reviewedToday = 0;
-        document.getElementById('dueCount').textContent = currentWords.length;
-        document.getElementById('reviewedCount').textContent = 0;
-
-        // Reset session stats
         sessionStats = { hard: 0, good: 0, easy: 0, deleted: 0, total: 0 };
-
-        showCurrentCard();
-
-      } catch (error) {
-        console.error("Error in smart practice:", error);
-        alert("Error: " + error.message);
-      }
-    }
-
-    // Load words from a specific show with different modes
-    async function loadWordsByShow(showName, season, episode, mode = 'all') {
-      try {
-        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        const response = await fetch(url);
-        const words = await response.json();
-
-        if (!words) {
-          alert("No words saved yet!");
-          document.getElementById('showListScreen').style.display = 'flex';
-          return;
-        }
-
-        // Filter words by show
-        let showWords = Object.entries(words)
-          .map(([id, word]) => ({ id, ...word }))
-          .filter(word =>
-            word.show === showName &&
-            word.season === season &&
-            word.episode === episode
-          );
-
-        if (showWords.length === 0) {
-          alert(`No words found for ${showName} S${season}E${episode}`);
-          document.getElementById('showListScreen').style.display = 'flex';
-          return;
-        }
-
-        // Apply mode filter
-        const now = Date.now();
-        if (mode === 'due') {
-          showWords = showWords.filter(word => !word.mastered && word.nextReview <= now);
-          if (showWords.length === 0) {
-            alert("No words due for review from this show!");
-            document.getElementById('showOptionsScreen').style.display = 'flex';
-            return;
-          }
-        } else if (mode === 'random') {
-          showWords = showWords.sort(() => Math.random() - 0.5).slice(0, Math.min(10, showWords.length));
-        } else if (mode === 'fresh') {
-          showWords = showWords.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).slice(0, 30);
-        }
-        // 'all' mode doesn't filter
-
-        currentWords = showWords;
-        todaysWords = []; // No re-review for show mode
-
-        // Hide show options, show review screen
-        const optionsScreen = document.getElementById('showOptionsScreen');
-        optionsScreen.style.display = 'none';
-        optionsScreen.style.visibility = 'hidden';
-
-        const reviewScreen = document.getElementById('reviewScreen');
-        reviewScreen.style.display = 'block';
-        reviewScreen.style.visibility = 'visible';
-        reviewScreen.style.opacity = '1';
-
+        
         currentIndex = 0;
         reviewedToday = 0;
         document.getElementById('dueCount').textContent = currentWords.length;
         document.getElementById('reviewedCount').textContent = 0;
+
+        switchScreen('reviewScreen');
         showCurrentCard();
+
       } catch (error) {
-        console.error("Error loading words by show:", error);
+        console.error("Smart practice error:", error);
         alert("Error: " + error.message);
       }
     }
 
-    // Load words from Firebase
     async function loadWords() {
       try {
         if (!currentUserId) {
@@ -1221,50 +959,31 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
         }
 
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
-        console.log("Fetching words from:", url);
         const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`Failed to load words: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Failed to load words: ${response.status}`);
+        
         const words = await response.json();
-        console.log("Raw words from Firebase:", words);
 
         if (!words) {
-          document.getElementById('reviewScreen').style.display = 'none';
-          document.getElementById('completionScreen').classList.add('active');
-          document.querySelector('.completion-message').textContent =
-            "No words saved yet. Start watching dramas!";
+          switchScreen('completionScreen');
+          document.querySelector('.completion-message').textContent = "No words saved yet.";
           return;
         }
 
-        // Filter words due for review
         const now = Date.now();
         currentWords = Object.entries(words)
           .map(([id, word]) => ({ id, ...word }))
           .filter(word => !word.mastered && word.nextReview <= now)
           .sort((a, b) => a.nextReview - b.nextReview)
-          .slice(0, 15); // Max 15 words per session
+          .slice(0, 15);
 
-        console.log(`Loaded ${currentWords.length} words due for review out of ${Object.keys(words).length} total`);
-
-        // Save today's words for re-review
         todaysWords = [...currentWords];
 
         if (currentWords.length === 0) {
-          console.log("No words due - showing completion screen");
-          const reviewScreen = document.getElementById('reviewScreen');
-          const completionScreen = document.getElementById('completionScreen');
-
-          reviewScreen.style.display = 'none';
-          completionScreen.classList.add('active');
-          document.querySelector('.completion-message').textContent =
-            "No words due right now. Practice anyway?";
-
-          console.log("Review screen display:", reviewScreen.style.display);
-          console.log("Completion screen classes:", completionScreen.className);
-          return;
+           // If no words due, show completion screen directly
+           switchScreen('completionScreen');
+           document.querySelector('.completion-message').textContent = "No words due right now.";
+           return;
         }
 
         document.getElementById('dueCount').textContent = currentWords.length;
@@ -1274,29 +993,22 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     }
 
-    // Show current flashcard
     function showCurrentCard() {
       if (currentIndex >= currentWords.length) {
-        // Completed! Show session summary
-        document.getElementById('reviewScreen').style.display = 'none';
-        document.getElementById('completionScreen').classList.add('active');
-
-        // Update summary display
+        // Session Complete
+        switchScreen('completionScreen');
+        
         document.getElementById('summaryTotal').textContent = sessionStats.total;
         document.getElementById('summaryHard').textContent = sessionStats.hard;
         document.getElementById('summaryGood').textContent = sessionStats.good;
         document.getElementById('summaryEasy').textContent = sessionStats.easy;
 
-        // Show deleted count if any
         if (sessionStats.deleted > 0) {
           document.getElementById('summaryDeletedContainer').style.display = 'block';
           document.getElementById('summaryDeleted').textContent = sessionStats.deleted;
         } else {
           document.getElementById('summaryDeletedContainer').style.display = 'none';
         }
-
-        // Continue button already has inline onclick, just log
-        console.log('✅ Session complete screen shown - Continue button ready with inline onclick');
 
         updateStats();
         return;
@@ -1306,58 +1018,45 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       const progress = ((currentIndex + 1) / currentWords.length) * 100;
       document.getElementById('progressFill').style.width = progress + '%';
 
-      // Update navigation button states
       document.getElementById('btnPrevious').disabled = (currentIndex === 0);
       document.getElementById('btnNext').disabled = (currentIndex === currentWords.length - 1);
 
-      // Show word prominently on front
       document.getElementById('wordFront').textContent = word.word;
 
-      // Check if context actually contains the word (timing issues may cause mismatch)
       const context = word.context || '';
       const contextContainsWord = context.includes(word.word);
 
-      // Show context sentence below only if it contains the word
       if (contextContainsWord) {
         document.getElementById('contextDisplay').textContent = `"${context}"`;
       } else {
         document.getElementById('contextDisplay').textContent = '';
       }
 
-      // Set answer (back of card)
       document.getElementById('wordDisplay').textContent = word.word;
       document.getElementById('readingDisplay').textContent = word.reading;
       document.getElementById('meaningDisplay').textContent = word.meaning;
 
-      // Show context sentence and translation on back only if context contains word
       const contextBack = document.getElementById('contextBack');
       if (contextContainsWord && context) {
         document.getElementById('contextSentenceBack').textContent = context;
-        document.getElementById('contextTranslation').textContent =
-          word.contextTranslation || 'English translation not available yet';
+        document.getElementById('contextTranslation').textContent = word.contextTranslation || '...';
         contextBack.style.display = 'block';
       } else {
         contextBack.style.display = 'none';
       }
 
-      // Reset card state
       document.getElementById('flashcard').classList.remove('flipped');
       isFlipped = false;
     }
 
-    // Flip card
     document.getElementById('flashcard').addEventListener('click', function(e) {
-      // Don't flip if clicking delete button
-      if (e.target.classList.contains('delete-btn')) {
-        return;
-      }
+      if (e.target.classList.contains('delete-btn')) return;
       if (!isFlipped) {
         this.classList.add('flipped');
         isFlipped = true;
       }
     });
 
-    // Delete word functionality
     document.getElementById('deleteBtnFront').addEventListener('click', (e) => {
       e.stopPropagation();
       deleteCurrentWord();
@@ -1365,15 +1064,11 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
 
     async function deleteCurrentWord() {
       const word = currentWords[currentIndex];
-
       try {
-        // Save to deletedWords list for learning
         const deletedUrl = `${firebaseConfig.databaseURL}/users/${currentUserId}/deletedWords/${word.id}.json`;
         await fetch(deletedUrl, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             word: word.word,
             reading: word.reading,
@@ -1382,48 +1077,33 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
           })
         });
 
-        // Delete from active words
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words/${word.id}.json`;
-        const response = await fetch(url, {
-          method: 'DELETE'
-        });
+        const response = await fetch(url, { method: 'DELETE' });
 
-        if (!response.ok) {
-          throw new Error(`Delete failed: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Delete failed`);
 
-        console.log('🗑️ Word deleted and added to skip list:', word.word);
-
-        // Track deletion in session stats
+        currentWords.splice(currentIndex, 1);
         sessionStats.deleted++;
         sessionStats.total++;
-
-        // Remove from current array
-        currentWords.splice(currentIndex, 1);
-
-        // Update stats
         document.getElementById('dueCount').textContent = currentWords.length;
 
-        // Show next card or completion
         if (currentWords.length === 0 || currentIndex >= currentWords.length) {
-          document.getElementById('reviewScreen').style.display = 'none';
-          document.getElementById('completionScreen').classList.add('active');
-          document.querySelector('.completion-message').textContent =
-            'All done! You deleted the last word.';
+            // Check if we finished the list
+            if (currentWords.length === 0) {
+                 switchScreen('completionScreen');
+                 document.querySelector('.completion-message').textContent = 'All done! Last word deleted.';
+            } else {
+                 showCurrentCard();
+            }
         } else {
-          // Show current card (same index, since we removed one)
-          if (currentIndex >= currentWords.length) {
-            currentIndex = currentWords.length - 1;
-          }
-          showCurrentCard();
+            showCurrentCard();
         }
       } catch (error) {
         console.error('Error deleting word:', error);
-        alert('Failed to delete word: ' + error.message);
+        alert('Failed to delete word');
       }
     }
 
-    // Navigation buttons
     document.getElementById('btnPrevious').addEventListener('click', () => {
       if (currentIndex > 0) {
         currentIndex--;
@@ -1438,20 +1118,15 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     });
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Only handle shortcuts when review screen is visible
       const reviewScreen = document.getElementById('reviewScreen');
       if (reviewScreen.style.display !== 'block') return;
 
-      // Left arrow = Previous
       if (e.key === 'ArrowLeft' && currentIndex > 0) {
         e.preventDefault();
         currentIndex--;
         showCurrentCard();
       }
-
-      // Right arrow = Next
       if (e.key === 'ArrowRight' && currentIndex < currentWords.length - 1) {
         e.preventDefault();
         currentIndex++;
@@ -1459,7 +1134,6 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     });
 
-    // Review buttons
     document.getElementById('btnHard').addEventListener('click', () => reviewWord('hard'));
     document.getElementById('btnGood').addEventListener('click', () => reviewWord('good'));
     document.getElementById('btnEasy').addEventListener('click', () => reviewWord('easy'));
@@ -1467,32 +1141,23 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
     async function reviewWord(difficulty) {
       const word = currentWords[currentIndex];
       const now = Date.now();
-
-      // Calculate next review
       const intervals = { hard: 1, good: 3, easy: 7 };
-      const daysToAdd = intervals[difficulty];
-      const nextReview = now + (daysToAdd * 24 * 60 * 60 * 1000);
+      const nextReview = now + (intervals[difficulty] * 24 * 60 * 60 * 1000);
 
-      // Update word
       word.lastReviewed = now;
       word.reviewCount = (word.reviewCount || 0) + 1;
       word.difficulty = difficulty;
       word.nextReview = nextReview;
 
-      // Mark as mastered if reviewed 5+ times with good/easy
       if (word.reviewCount >= 5 && (difficulty === 'good' || difficulty === 'easy')) {
         word.mastered = true;
       }
 
-      // Save to Firebase using REST API
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words/${word.id}.json`;
-
-        const response = await fetch(url, {
+        await fetch(url, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             lastReviewed: word.lastReviewed,
             reviewCount: word.reviewCount,
@@ -1501,19 +1166,12 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
             mastered: word.mastered
           })
         });
-
-        if (!response.ok) {
-          throw new Error(`Update failed: ${response.status}`);
-        }
       } catch (error) {
         console.error("Error updating word:", error);
       }
 
-      // Track session stats
       sessionStats[difficulty]++;
       sessionStats.total++;
-
-      // Next card
       reviewedToday++;
       document.getElementById('reviewedCount').textContent = reviewedToday;
       currentIndex++;
@@ -1523,12 +1181,9 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
     async function updateStats() {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/stats.json`;
-
         await fetch(url, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             reviewedToday: reviewedToday,
             lastReviewDate: Date.now()
@@ -1539,63 +1194,12 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
       }
     }
 
-    // Continue button handler function (global for onclick compatibility)
+    // Continue button handler function
     window.handleContinue = function() {
-      console.log('🔘 Continue button clicked');
-
-      try {
-        // Get all screen elements
-        const loginScreen = document.getElementById('loginScreen');
-        const showListScreen = document.getElementById('showListScreen');
-        const showOptionsScreen = document.getElementById('showOptionsScreen');
-        const reviewScreen = document.getElementById('reviewScreen');
-        const completionScreen = document.getElementById('completionScreen');
-
-        console.log('🔄 Hiding ALL screens first...');
-        // HIDE ALL SCREENS first
-        if (loginScreen) {
-          loginScreen.style.display = 'none';
-          loginScreen.style.visibility = 'hidden';
-        }
-        if (showOptionsScreen) {
-          showOptionsScreen.style.display = 'none';
-          showOptionsScreen.style.visibility = 'hidden';
-        }
-        if (reviewScreen) {
-          reviewScreen.style.display = 'none';
-          reviewScreen.style.visibility = 'hidden';
-        }
-        if (completionScreen) {
-          completionScreen.classList.remove('active');
-          completionScreen.style.display = 'none';
-          completionScreen.style.visibility = 'hidden';
-        }
-
-        console.log('🔄 Now showing ONLY show list screen...');
-        // SHOW ONLY show list screen
-        if (showListScreen) {
-          showListScreen.style.display = 'flex';
-          showListScreen.style.visibility = 'visible';
-          showListScreen.style.opacity = '1';
-
-          // Reload show list to refresh counts
-          loadShowList();
-
-          console.log('✅ Navigation complete - show list should be visible now');
-        } else {
-          console.error('❌ Show list screen not found!');
-          alert('Error: Could not find show list screen. Please refresh the page.');
-        }
-      } catch (error) {
-        console.error('❌ Error in handleContinue:', error);
-        alert('Navigation error: ' + error.message);
-      }
+      switchScreen('showListScreen');
+      loadShowList(); // Refresh the list numbers
     };
 
-    // Note: Continue button uses inline onclick="window.handleContinue()" for maximum compatibility
-    console.log('✅ Continue button handler registered - will be triggered via inline onclick');
-
-    // Helper function to get cookie value
     function getCookie(name) {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -1605,43 +1209,18 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
 
     // Initialize
     if (initFirebase()) {
-      // Check if user ID and API key are already saved
-      console.log('🔍 Checking for saved credentials...');
-
-      let savedUserId = null;
-      let savedApiKey = null;
-
-      // Try localStorage first
-      try {
-        savedUserId = localStorage.getItem('savedUserId');
-        savedApiKey = localStorage.getItem('openaiApiKey');
-        console.log('📦 localStorage:', { savedUserId: savedUserId || 'null', savedApiKeyLength: savedApiKey?.length || 0 });
-      } catch (e) {
-        console.error('❌ localStorage blocked:', e);
-      }
-
-      // Fall back to cookies if localStorage didn't work
-      if (!savedUserId || !savedApiKey) {
-        savedUserId = getCookie('savedUserId');
-        savedApiKey = getCookie('openaiApiKey');
-        console.log('🍪 cookies:', { savedUserId: savedUserId || 'null', savedApiKeyLength: savedApiKey?.length || 0 });
-      }
+      let savedUserId = localStorage.getItem('savedUserId') || getCookie('savedUserId');
+      let savedApiKey = localStorage.getItem('openaiApiKey') || getCookie('openaiApiKey');
 
       if (savedUserId && savedApiKey) {
-        // Auto-login if both are saved
-        console.log('✅ Auto-login with saved credentials');
         currentUserId = savedUserId;
         document.getElementById('userIdInput').value = savedUserId;
         document.getElementById('apiKeyInput').value = savedApiKey;
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('showListScreen').style.display = 'flex';
+        switchScreen('showListScreen');
         loadShowList();
       } else if (savedUserId) {
-        // Pre-fill user ID but show login screen for API key
-        console.log('⚠️ Only User ID saved, showing login screen');
         document.getElementById('userIdInput').value = savedUserId;
-      } else {
-        console.log('ℹ️ No saved credentials, showing login screen');
+        switchScreen('loginScreen');
       }
     }
   </script>
