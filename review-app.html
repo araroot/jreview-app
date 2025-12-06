@@ -434,7 +434,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V31</h1>
+    <h1>📚 Japanese Review V32</h1>
     <div class="stats">
       <div class="stat-item">
         <div class="stat-number" id="dueCount">0</div>
@@ -688,8 +688,17 @@ const firebaseConfig = {
 
     // Review All Shows button - loads due words across all shows
     document.getElementById('reviewAllShows').addEventListener('click', async () => {
-      document.getElementById('showListScreen').style.display = 'none';
-      document.getElementById('reviewScreen').style.display = 'block';
+      // Hide show list
+      const showListScreen = document.getElementById('showListScreen');
+      showListScreen.style.display = 'none';
+      showListScreen.style.visibility = 'hidden';
+
+      // Show review screen
+      const reviewScreen = document.getElementById('reviewScreen');
+      reviewScreen.style.display = 'block';
+      reviewScreen.style.visibility = 'visible';
+      reviewScreen.style.opacity = '1';
+
       await loadWords();
     });
 
@@ -748,7 +757,13 @@ const firebaseConfig = {
         reviewedToday = 0;
         document.getElementById('dueCount').textContent = currentWords.length;
         document.getElementById('reviewedCount').textContent = 0;
-        document.getElementById('reviewScreen').style.display = 'block';
+
+        // Show review screen
+        const reviewScreen = document.getElementById('reviewScreen');
+        reviewScreen.style.display = 'block';
+        reviewScreen.style.visibility = 'visible';
+        reviewScreen.style.opacity = '1';
+
         showCurrentCard();
       } catch (error) {
         console.error("Error loading random words:", error);
@@ -785,7 +800,13 @@ const firebaseConfig = {
         reviewedToday = 0;
         document.getElementById('dueCount').textContent = currentWords.length;
         document.getElementById('reviewedCount').textContent = 0;
-        document.getElementById('reviewScreen').style.display = 'block';
+
+        // Show review screen
+        const reviewScreen = document.getElementById('reviewScreen');
+        reviewScreen.style.display = 'block';
+        reviewScreen.style.visibility = 'visible';
+        reviewScreen.style.opacity = '1';
+
         showCurrentCard();
       } catch (error) {
         console.error("Error loading fresh words:", error);
@@ -1096,8 +1117,16 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
         currentWords = selectedWords;
         todaysWords = [];
 
-        document.getElementById('showOptionsScreen').style.display = 'none';
-        document.getElementById('reviewScreen').style.display = 'block';
+        // Hide options screen
+        const optionsScreen = document.getElementById('showOptionsScreen');
+        optionsScreen.style.display = 'none';
+        optionsScreen.style.visibility = 'hidden';
+
+        // Show review screen (RESET VISIBILITY!)
+        const reviewScreen = document.getElementById('reviewScreen');
+        reviewScreen.style.display = 'block';
+        reviewScreen.style.visibility = 'visible';
+        reviewScreen.style.opacity = '1';
 
         currentIndex = 0;
         reviewedToday = 0;
@@ -1163,8 +1192,14 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
         todaysWords = []; // No re-review for show mode
 
         // Hide show options, show review screen
-        document.getElementById('showOptionsScreen').style.display = 'none';
-        document.getElementById('reviewScreen').style.display = 'block';
+        const optionsScreen = document.getElementById('showOptionsScreen');
+        optionsScreen.style.display = 'none';
+        optionsScreen.style.visibility = 'hidden';
+
+        const reviewScreen = document.getElementById('reviewScreen');
+        reviewScreen.style.display = 'block';
+        reviewScreen.style.visibility = 'visible';
+        reviewScreen.style.opacity = '1';
 
         currentIndex = 0;
         reviewedToday = 0;
