@@ -696,8 +696,16 @@ const firebaseConfig = {
 
     // Back to shows from options
     document.getElementById('backToShowsBtn').addEventListener('click', () => {
-      document.getElementById('showOptionsScreen').style.display = 'none';
-      document.getElementById('showListScreen').style.display = 'flex';
+      // Hide options screen
+      const optionsScreen = document.getElementById('showOptionsScreen');
+      optionsScreen.style.display = 'none';
+      optionsScreen.style.visibility = 'hidden';
+
+      // Show show list (reset visibility)
+      const showListScreen = document.getElementById('showListScreen');
+      showListScreen.style.display = 'flex';
+      showListScreen.style.visibility = 'visible';
+      showListScreen.style.opacity = '1';
     });
 
     // Show options handlers - Smart practice
@@ -853,8 +861,16 @@ const firebaseConfig = {
     // Show options screen for selected show
     async function showOptionsForShow(show) {
       selectedShow = show;
+      // Hide show list
       document.getElementById('showListScreen').style.display = 'none';
-      document.getElementById('showOptionsScreen').style.display = 'flex';
+      document.getElementById('showListScreen').style.visibility = 'hidden';
+
+      // Show options screen (reset both display AND visibility)
+      const optionsScreen = document.getElementById('showOptionsScreen');
+      optionsScreen.style.display = 'flex';
+      optionsScreen.style.visibility = 'visible';
+      optionsScreen.style.opacity = '1';
+
       document.getElementById('showOptionsTitle').textContent = `📺 ${show.name} S${show.season}E${show.episode}`;
     }
 
