@@ -1244,6 +1244,26 @@ Return between ${Math.min(targetCount, words.length)} and ${targetCount} words m
           document.getElementById('summaryDeletedContainer').style.display = 'none';
         }
 
+        // RE-ATTACH Continue button listeners (critical for multiple sessions)
+        setTimeout(() => {
+          const continueBtn = document.getElementById('continueBtn');
+          if (continueBtn) {
+            console.log('🔄 Re-attaching Continue button listeners for new session');
+            // Remove old listeners first to avoid duplicates
+            continueBtn.replaceWith(continueBtn.cloneNode(true));
+            const freshBtn = document.getElementById('continueBtn');
+
+            freshBtn.addEventListener('click', window.handleContinue);
+            freshBtn.addEventListener('touchend', (e) => {
+              e.preventDefault();
+              window.handleContinue();
+            });
+            console.log('✅ Continue button listeners re-attached');
+          } else {
+            console.error('❌ Continue button not found when trying to re-attach!');
+          }
+        }, 50);
+
         updateStats();
         return;
       }
