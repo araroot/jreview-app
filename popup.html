@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin: 0;
+    }
+
+    h2 {
+      margin: 0 0 15px 0;
+      font-size: 20px;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+
+    .label {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+
+    .user-id {
+      font-size: 14px;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px;
+      border-radius: 6px;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary {
+      background: white;
+      color: #667eea;
+    }
+
+    .btn-primary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      opacity: 0.8;
+    }
+
+    .success-message {
+      display: none;
+      background: #10b981;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .success-message.show {
+      display: block;
+    }
+
+    .instructions {
+      font-size: 12px;
+      opacity: 0.9;
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎌 Japanese Learning <span style="font-size: 14px; opacity: 0.7;">v2.0</span></h2>
+
+  <div class="section">
+    <div class="label">Currently Watching:</div>
+    <div class="user-id" id="currentShow" style="font-size: 13px; cursor: pointer;" title="Click to change">
+      Not set - Click to set
+    </div>
+    <button class="btn btn-secondary" id="setShowBtn" style="font-size: 12px; padding: 8px;">✏️ Set Show/Episode</button>
+  </div>
+
+  <div class="section" id="showEditor" style="display: none;">
+    <div class="label">Show Name:</div>
+    <input type="text" id="showName" placeholder="e.g., Tokyo Tarareba" style="width: 100%; padding: 8px; border-radius: 6px; border: none; margin-bottom: 10px; box-sizing: border-box;">
+
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+      <div style="flex: 1;">
+        <div class="label">Season:</div>
+        <input type="number" id="season" placeholder="1" min="1" style="width: 100%; padding: 8px; border-radius: 6px; border: none; box-sizing: border-box;">
+      </div>
+      <div style="flex: 1;">
+        <div class="label">Episode:</div>
+        <input type="number" id="episode" placeholder="1" min="1" style="width: 100%; padding: 8px; border-radius: 6px; border: none; box-sizing: border-box;">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="saveShowBtn">💾 Save</button>
+    <button class="btn btn-secondary" id="cancelShowBtn" style="font-size: 12px; padding: 8px;">Cancel</button>
+  </div>
+
+  <div class="section">
+    <div class="label">Your User ID:</div>
+    <div class="user-id" id="userId">Loading...</div>
+    <button class="btn btn-primary" id="copyBtn">📋 Copy User ID</button>
+    <div class="success-message" id="successMsg">✓ Copied to clipboard!</div>
+    <div class="instructions">
+      Use this ID in your mobile review app to sync your vocabulary.
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="label">Saved Words</div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-number" id="totalWords">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number" id="dueWords">0</div>
+        <div class="stat-label">Due</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number" id="masteredWords">0</div>
+        <div class="stat-label">Mastered</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-secondary" id="openReviewBtn">📱 Open Review App</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

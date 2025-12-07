@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Japanese Learning Assistant for Streaming",
+  "version": "2.0",
+  "description": "Learn Japanese while watching Netflix and Prime Video with N2-level vocabulary assistance",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "*://*.netflix.com/*",
+    "*://*.amazon.com/*",
+    "*://*.primevideo.com/*",
+    "https://*.firebaseio.com/*",
+    "https://*.googleapis.com/*"
+  ],
+  "content_scripts": [{
+    "matches": [
+      "*://*.netflix.com/*",
+      "*://*.amazon.com/*",
+      "*://*.primevideo.com/*"
+    ],
+    "css": ["css/styles.css"],
+    "js": ["js/config.js", "js/content.js"]
+  }],
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Japanese Learning Assistant"
+  }
+}
