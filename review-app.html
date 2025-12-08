@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V36</h1>
+    <h1>📚 Japanese Review V37</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -785,7 +785,18 @@ Be concise and practical. Focus on common, everyday usage.`;
         }
         
         console.log(`Seeding complete! Seeded ${seeded} words.`);
-        alert(`Seeded ${seeded} common words (verbs + adjectives) with AI usage patterns!`);
+        
+        // Verify seeding worked
+        const verifyUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const verifyResponse = await fetch(verifyUrl);
+        const verified = await verifyResponse.json();
+        const verifiedCount = verified ? Object.keys(verified).length : 0;
+        
+        if (verifiedCount === 0) {
+          throw new Error('Seeding completed but no words found in database. Please try again.');
+        }
+        
+        alert(`Successfully seeded ${verifiedCount} common words (verbs + adjectives) with AI usage patterns!`);
       } catch (error) {
         console.error('Error seeding verbs:', error);
         alert('Error seeding verbs: ' + error.message);
@@ -825,11 +836,26 @@ Be concise and practical. Focus on common, everyday usage.`;
 
         if (!seededWords || Object.keys(seededWords).length === 0) {
           // Not seeded yet - seed them now
-          alert('Common words not seeded yet. Seeding now (this will take a few minutes)...');
-          await seedCommonVerbs();
-          // Reload after seeding
-          await loadCommonVerbsPractice();
-          return;
+          const shouldSeed = confirm('Common words not seeded yet. Would you like to seed them now?\n\nThis will take a few minutes and requires your OpenAI API key.');
+          if (!shouldSeed) {
+            switchScreen('showListScreen');
+            return;
+          }
+          
+          document.getElementById('wordFront').textContent = 'Seeding words...';
+          document.getElementById('contextDisplay').textContent = 'This will take a few minutes. Please wait...';
+          
+          try {
+            await seedCommonVerbs();
+            // Reload after seeding
+            await loadCommonVerbsPractice();
+            return;
+          } catch (error) {
+            console.error('Seeding error:', error);
+            alert('Error seeding words: ' + error.message + '\n\nPlease check your OpenAI API key and try again.');
+            switchScreen('showListScreen');
+            return;
+          }
         }
 
         // Get user's existing words to check which words they've already learned
@@ -908,7 +934,14 @@ Be concise and practical. Focus on common, everyday usage.`;
         console.log(`Selected ${wordsToPractice.length} words for practice`);
 
         if (wordsToPractice.length === 0) {
-          alert(`No words available for practice.\n\nHardest: ${hardestWords.length}\nHarder: ${harderWords.length}\nEasier: ${easierWords.length}\n\nYou may need to seed the words first.`);
+          const errorMsg = `No words available for practice.\n\n` +
+            `Total seeded words: ${allSeededWords.length}\n` +
+            `Hardest available: ${hardestWords.length}\n` +
+            `Harder available: ${harderWords.length}\n` +
+            `Easier available: ${easierWords.length}\n` +
+            `Already learned: ${existingWordSet.size}\n\n` +
+            `If words aren't seeded, click "Practice Common" again to seed them.`;
+          alert(errorMsg);
           switchScreen('showListScreen');
           return;
         }
