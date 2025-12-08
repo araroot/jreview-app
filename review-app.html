@@ -880,13 +880,17 @@ Be concise and practical. Focus on common, everyday usage.`;
         const halfPoint = Math.floor(totalLength / 2);
         const lastQuarterStart = Math.floor(totalLength * 0.75);
         
-        console.log(`Total words: ${totalLength}, Hardest available: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}`);
+        const unmatchedWords = []; // Words that don't match the index (fallback)
         
         allSeededWords.forEach(word => {
           if (existingWordSet.has(word.word)) return; // Skip already learned
           
           const index = wordToIndex.get(word.word);
-          if (index === undefined) return; // Skip if not in original list
+          if (index === undefined) {
+            // Word not in original list - add to unmatched for fallback
+            unmatchedWords.push(word);
+            return;
+          }
           
           if (index >= lastQuarterStart) {
             hardestWords.push(word);
@@ -896,6 +900,8 @@ Be concise and practical. Focus on common, everyday usage.`;
             easierWords.push(word);
           }
         });
+        
+        console.log(`Word matching: Total seeded: ${allSeededWords.length}, Hardest: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}, Unmatched: ${unmatchedWords.length}, Already learned: ${existingWordSet.size}`);
         
         // Select 20 words: Focus heavily on last 25% - at least 50% from there
         const targetCount = 20;
