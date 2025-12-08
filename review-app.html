@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V42</h1>
+    <h1>📚 Japanese Review V43</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -918,19 +918,13 @@ Be concise and practical. Focus on common, everyday usage.`;
         const targetCount = 20;
         let selectedWords = [];
         
-        // Prioritize hardest verbs (ranks 151-230) - at least 50% from here
-        const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from hardest
-        const hardestToAdd = Math.min(hardestVerbs.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
-        selectedWords.push(...hardestVerbs.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
+        // First: Use ALL hardest verbs (ranks 151-230) - use every single one available
+        selectedWords.push(...hardestVerbs.sort(() => Math.random() - 0.5));
         
-        // Second priority: Fill with harder verbs (ranks 101-150)
-        const remaining = targetCount - selectedWords.length;
-        if (remaining > 0 && harderVerbs.length > 0) {
-          const harderToAdd = Math.min(harderVerbs.length, remaining);
-          selectedWords.push(...harderVerbs.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
-        }
+        // Second: Use ALL harder verbs (ranks 101-150) - use every single one available
+        selectedWords.push(...harderVerbs.sort(() => Math.random() - 0.5));
         
-        // Third priority: Use easier verbs only if needed
+        // Third: Fill remaining slots with easier verbs only if we still need more
         const stillRemaining = targetCount - selectedWords.length;
         if (stillRemaining > 0 && easierVerbs.length > 0) {
           const easierToAdd = Math.min(easierVerbs.length, stillRemaining);
