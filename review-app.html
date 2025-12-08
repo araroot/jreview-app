@@ -99,7 +99,7 @@
       <h2>Choose a Show 📺</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
       <button class="login-btn" id="reviewAllShows" style="margin-bottom: 15px; background: linear-gradient(135deg, #10b981, #059669); font-size: 16px;">📅 Review All Shows (Due: <span id="allShowsDueCount">0</span>)</button>
-      <button class="login-btn" id="practiceCommonVerbs" style="margin-bottom: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 16px;">🔥 Practice Common Verbs (AI Usage Patterns)</button>
+      <button class="login-btn" id="practiceCommonVerbs" style="margin-bottom: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 16px;">🔥 Practice Common Verbs</button>
       <div id="showList" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;"></div>
     </div>
 
@@ -643,27 +643,14 @@
       currentIndex++; showCurrentCard();
     }
 
-    // Generate meaning and usage pattern for a verb using AI (only if not cached)
-    async function generateVerbInfo(verb, cachedWord = null) {
-      // If we have cached word data with meaning and context, use it
-      if (cachedWord && cachedWord.meaning && cachedWord.context) {
-        console.log(`Using cached info for verb: ${verb.word}`);
-        return {
-          meaning: cachedWord.meaning,
-          example: cachedWord.context,
-          exampleTranslation: cachedWord.contextTranslation || ''
-        };
-      }
-
-      // Otherwise, generate with AI
+    // Generate meaning and usage pattern for a verb using AI
+    async function generateVerbInfo(verb) {
       try {
         const apiKey = localStorage.getItem('openaiApiKey');
         if (!apiKey) { 
           console.error('OpenAI API key not found');
           return null;
         }
-
-        console.log(`Generating AI info for verb: ${verb.word}`);
 
         const prompt = `You are a Japanese language teacher. For the verb "${verb.word}" (reading: ${verb.reading}), provide:
 1. A clear English meaning/translation
@@ -717,7 +704,85 @@ Be concise and practical. Focus on common, everyday usage.`;
       }
     }
 
-    // Load common verbs practice session
+    // Seed Firebase with all common verbs and their AI-generated info (run once)
+    async function seedCommonVerbs() {
+      try {
+        console.log('Starting to seed common verbs...');
+        const apiKey = localStorage.getItem('openaiApiKey');
+        if (!apiKey) {
+          alert('OpenAI API key required to seed verbs');
+          return;
+        }
+
+        // Check if already seeded
+        const checkUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const checkResponse = await fetch(checkUrl);
+        const existing = await checkResponse.json();
+        
+        if (existing && Object.keys(existing).length > 0) {
+          console.log('Common verbs already seeded. Skipping...');
+          return;
+        }
+
+        // Get all verbs from COMMON_VERBS
+        if (!COMMON_VERBS || COMMON_VERBS.length === 0) {
+          alert('Common verbs data not loaded');
+          return;
+        }
+
+        let seeded = 0;
+        for (let i = 0; i < COMMON_VERBS.length; i++) {
+          const verb = COMMON_VERBS[i];
+          const verbId = verb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          
+          // Check if already exists
+          const verbUrl = `${firebaseConfig.databaseURL}/commonVerbs/${verbId}.json`;
+          const verbCheck = await fetch(verbUrl);
+          const verbExists = await verbCheck.json();
+          
+          if (verbExists && verbExists.meaning) {
+            console.log(`Skipping ${verb.word} (already seeded)`);
+            continue;
+          }
+
+          // Generate AI info
+          console.log(`Generating AI info for ${verb.word} (${i+1}/${COMMON_VERBS.length})...`);
+          const verbInfo = await generateVerbInfo(verb);
+          
+          if (verbInfo) {
+            const verbData = {
+              word: verb.word,
+              reading: verb.reading,
+              meaning: verbInfo.meaning,
+              context: verbInfo.example,
+              contextTranslation: verbInfo.exampleTranslation,
+              seededAt: Date.now()
+            };
+            
+            // Save to Firebase
+            await fetch(verbUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(verbData)
+            });
+            
+            seeded++;
+            console.log(`Seeded ${verb.word} (${seeded}/${COMMON_VERBS.length})`);
+            
+            // Small delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+        
+        console.log(`Seeding complete! Seeded ${seeded} verbs.`);
+        alert(`Seeded ${seeded} common verbs with AI usage patterns!`);
+      } catch (error) {
+        console.error('Error seeding verbs:', error);
+        alert('Error seeding verbs: ' + error.message);
+      }
+    }
+
+    // Load common verbs practice session (loads from Firebase, no AI calls)
     async function loadCommonVerbsPractice() {
       try {
         if (!COMMON_VERBS || COMMON_VERBS.length === 0) {
@@ -728,7 +793,21 @@ Be concise and practical. Focus on common, everyday usage.`;
         // Show loading message
         switchScreen('reviewScreen');
         document.getElementById('wordFront').textContent = 'Loading verbs...';
-        document.getElementById('contextDisplay').textContent = 'Generating AI usage patterns...';
+        document.getElementById('contextDisplay').textContent = 'Loading from database...';
+
+        // Load all seeded verbs from Firebase
+        const seedUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const seedResponse = await fetch(seedUrl);
+        const seededVerbs = await seedResponse.json();
+
+        if (!seededVerbs || Object.keys(seededVerbs).length === 0) {
+          // Not seeded yet - seed them now
+          alert('Common verbs not seeded yet. Seeding now (this will take a few minutes)...');
+          await seedCommonVerbs();
+          // Reload after seeding
+          await loadCommonVerbsPractice();
+          return;
+        }
 
         // Get user's existing words to check which verbs they've already learned
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
@@ -736,72 +815,67 @@ Be concise and practical. Focus on common, everyday usage.`;
         const existingWords = await response.json();
         const existingWordSet = existingWords ? new Set(Object.values(existingWords).map(w => w.word)) : new Set();
 
-        // Select 20 random verbs (or all if less than 20)
-        const verbsToPractice = [...COMMON_VERBS]
+        // Convert seeded verbs to array and filter
+        const allSeededVerbs = Object.values(seededVerbs);
+        const verbsToPractice = allSeededVerbs
           .filter(v => !existingWordSet.has(v.word)) // Prefer verbs not already learned
           .sort(() => Math.random() - 0.5)
           .slice(0, 20);
 
         if (verbsToPractice.length === 0) {
           // If all verbs are already learned, just pick random ones
-          verbsToPractice.push(...COMMON_VERBS.sort(() => Math.random() - 0.5).slice(0, 20));
+          verbsToPractice.push(...allSeededVerbs.sort(() => Math.random() - 0.5).slice(0, 20));
         }
 
-        // Generate word objects with AI-powered meanings and usage patterns (cached when possible)
+        // Create word objects from seeded data (no AI calls needed!)
         currentWords = [];
         for (let i = 0; i < verbsToPractice.length; i++) {
-          const verb = verbsToPractice[i];
-          const wordId = verb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          const seededVerb = verbsToPractice[i];
+          const wordId = seededVerb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
           // Check if word already exists in user's vocabulary
           const existingWord = existingWords && existingWords[wordId];
           
-          // Only generate AI info if we don't have cached data
-          const verbInfo = await generateVerbInfo(verb, existingWord);
-          
-          if (verbInfo) {
-            if (existingWord) {
-              // Use existing word data (already cached, no AI call needed)
-              currentWords.push({
-                id: wordId,
-                ...existingWord
+          if (existingWord) {
+            // Use existing word data
+            currentWords.push({
+              id: wordId,
+              ...existingWord
+            });
+          } else {
+            // Create new word object from seeded data
+            const newWord = {
+              id: wordId,
+              word: seededVerb.word,
+              reading: seededVerb.reading,
+              meaning: seededVerb.meaning,
+              context: seededVerb.context,
+              contextTranslation: seededVerb.contextTranslation,
+              platform: 'common_verbs',
+              show: 'Common Verbs',
+              season: null,
+              episode: null,
+              savedAt: Date.now(),
+              lastReviewed: null,
+              nextReview: Date.now(),
+              reviewCount: 0,
+              difficulty: 'new',
+              timesEncountered: 1,
+              mastered: false
+            };
+            
+            // Save to user's words in Firebase
+            try {
+              await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newWord)
               });
-            } else {
-              // Create new word object with AI-generated info
-              const newWord = {
-                id: wordId,
-                word: verb.word,
-                reading: verb.reading,
-                meaning: verbInfo.meaning,
-                context: verbInfo.example,
-                contextTranslation: verbInfo.exampleTranslation,
-                platform: 'common_verbs',
-                show: 'Common Verbs',
-                season: null,
-                episode: null,
-                savedAt: Date.now(),
-                lastReviewed: null,
-                nextReview: Date.now(),
-                reviewCount: 0,
-                difficulty: 'new',
-                timesEncountered: 1,
-                mastered: false
-              };
-              
-              // Save to Firebase immediately to cache the AI-generated info
-              try {
-                await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(newWord)
-                });
-                console.log(`Cached AI-generated info for verb: ${verb.word}`);
-              } catch (error) {
-                console.error('Error saving verb to Firebase:', error);
-              }
-              
-              currentWords.push(newWord);
+            } catch (error) {
+              console.error('Error saving verb to Firebase:', error);
             }
+            
+            currentWords.push(newWord);
           }
           
           // Update progress indicator
