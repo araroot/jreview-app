@@ -850,9 +850,11 @@ Be concise and practical. Focus on common, everyday usage.`;
         const harderWords = [];
         const hardestWords = [];
         
-        const totalLength = COMMON_WORDS.length;
+        const totalLength = wordsToUse.length;
         const halfPoint = Math.floor(totalLength / 2);
         const lastQuarterStart = Math.floor(totalLength * 0.75);
+        
+        console.log(`Total words: ${totalLength}, Hardest available: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}`);
         
         allSeededWords.forEach(word => {
           if (existingWordSet.has(word.word)) return; // Skip already learned
@@ -902,6 +904,14 @@ Be concise and practical. Focus on common, everyday usage.`;
         }
         
         const wordsToPractice = selectedWords.slice(0, targetCount);
+        
+        console.log(`Selected ${wordsToPractice.length} words for practice`);
+
+        if (wordsToPractice.length === 0) {
+          alert(`No words available for practice.\n\nHardest: ${hardestWords.length}\nHarder: ${harderWords.length}\nEasier: ${easierWords.length}\n\nYou may need to seed the words first.`);
+          switchScreen('showListScreen');
+          return;
+        }
 
         // Create word objects from seeded data (no AI calls needed!)
         currentWords = [];
