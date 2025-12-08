@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V40</h1>
+    <h1>📚 Japanese Review V41</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -796,7 +796,7 @@ Be concise and practical. Focus on common, everyday usage.`;
           throw new Error('Seeding completed but no words found in database. Please try again.');
         }
         
-        alert(`Successfully seeded ${verifiedCount} common words (verbs + adjectives) with AI usage patterns!`);
+        alert(`Successfully seeded ${verifiedCount} common words (verbs + adjectives) with AI usage patterns!\n\nHardest words seeded first, then harder, then easier.`);
       } catch (error) {
         console.error('Error seeding verbs:', error);
         alert('Error seeding verbs: ' + error.message);
