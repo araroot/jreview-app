@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V41</h1>
+    <h1>📚 Japanese Review V42</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -872,94 +872,91 @@ Be concise and practical. Focus on common, everyday usage.`;
         
         const existingWordSet = existingWords ? new Set(Object.values(existingWords).map(w => w.word)) : new Set();
 
-        // Convert seeded words to array and create difficulty-indexed map
+        // Convert seeded words to array
         const allSeededWords = Object.values(seededWords);
         
-        // Create a map of word -> index in original words list (for difficulty ordering)
-        const wordToIndex = new Map();
-        wordsToUse.forEach((w, idx) => wordToIndex.set(w.word, idx));
+        // Create maps for verbs and adjectives separately
+        // Verbs: rank 1-100=easier, 101-230=harder, 151-230=hardest
+        const verbToRank = new Map();
+        COMMON_VERBS.forEach((v, idx) => verbToRank.set(v.word, idx + 1)); // Rank = index + 1
         
-        // Separate into easier (first 50%) and harder (2nd half + last 25%)
-        const easierWords = [];
-        const harderWords = [];
-        const hardestWords = [];
+        // Adjectives: treat as medium difficulty (can be added later if needed)
+        const adjectiveSet = new Set(COMMON_ADJECTIVES.map(a => a.word));
         
-        const totalLength = wordsToUse.length;
-        const halfPoint = Math.floor(totalLength / 2);
-        const lastQuarterStart = Math.floor(totalLength * 0.75);
-        
-        const unmatchedWords = []; // Words that don't match the index (fallback)
+        // Separate verbs by rank (don't mix with adjectives in difficulty)
+        const easierVerbs = [];      // Ranks 1-100
+        const harderVerbs = [];      // Ranks 101-150
+        const hardestVerbs = [];     // Ranks 151-230
+        const adjectives = [];       // All adjectives
+        const unmatchedWords = [];   // Words not in either list
         
         allSeededWords.forEach(word => {
-          // Only skip if mastered, not just learned
+          // Only skip if mastered
           if (masteredWordSet.has(word.word)) return;
           
-          const index = wordToIndex.get(word.word);
-          if (index === undefined) {
-            // Word not in original list - add to unmatched for fallback
-            unmatchedWords.push(word);
-            return;
-          }
-          
-          if (index >= lastQuarterStart) {
-            hardestWords.push(word);
-          } else if (index >= halfPoint) {
-            harderWords.push(word);
+          const verbRank = verbToRank.get(word.word);
+          if (verbRank !== undefined) {
+            // It's a verb - categorize by rank
+            if (verbRank >= 151) {
+              hardestVerbs.push(word);
+            } else if (verbRank >= 101) {
+              harderVerbs.push(word);
+            } else {
+              easierVerbs.push(word);
+            }
+          } else if (adjectiveSet.has(word.word)) {
+            // It's an adjective
+            adjectives.push(word);
           } else {
-            easierWords.push(word);
+            // Unmatched word
+            unmatchedWords.push(word);
           }
         });
         
-        console.log(`Word matching: Total seeded: ${allSeededWords.length}, Hardest: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}, Unmatched: ${unmatchedWords.length}, Total learned: ${existingWordSet.size}, Mastered: ${masteredWordSet.size}`);
+        console.log(`Word selection: Total seeded: ${allSeededWords.length}, Hardest verbs (151-230): ${hardestVerbs.length}, Harder verbs (101-150): ${harderVerbs.length}, Easier verbs (1-100): ${easierVerbs.length}, Adjectives: ${adjectives.length}, Unmatched: ${unmatchedWords.length}, Mastered: ${masteredWordSet.size}`);
         
         const targetCount = 20;
         let selectedWords = [];
         
-        // If we have words matched to difficulty categories, use smart selection
-        const totalMatched = hardestWords.length + harderWords.length + easierWords.length;
+        // Prioritize hardest verbs (ranks 151-230) - at least 50% from here
+        const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from hardest
+        const hardestToAdd = Math.min(hardestVerbs.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
+        selectedWords.push(...hardestVerbs.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
         
-        if (totalMatched > 0) {
-          // Smart selection based on difficulty
-          const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from last 25%
-          
-          // First priority: Fill at least 50% (10 words) from the hardest words (last 25%)
-          const hardestToAdd = Math.min(hardestWords.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
-          selectedWords.push(...hardestWords.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
-          
-          // Second priority: Fill remaining slots from harder words (2nd half, but not last 25%)
-          const remaining = targetCount - selectedWords.length;
-          if (remaining > 0 && harderWords.length > 0) {
-            const harderToAdd = Math.min(harderWords.length, remaining);
-            selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
-          }
-          
-          // Third priority: Only if we still need more, use easier words
-          const stillRemaining = targetCount - selectedWords.length;
-          if (stillRemaining > 0 && easierWords.length > 0) {
-            const easierToAdd = Math.min(easierWords.length, stillRemaining);
-            selectedWords.push(...easierWords.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
-          }
-          
-          // Fourth priority: Use unmatched words (words not in difficulty index)
-          const stillRemaining2 = targetCount - selectedWords.length;
-          if (stillRemaining2 > 0 && unmatchedWords.length > 0) {
-            const unmatchedToAdd = Math.min(unmatchedWords.length, stillRemaining2);
-            selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
-          }
-        } else {
-          // No words matched difficulty - just use all available seeded words (excluding mastered)
-          console.log('No words matched difficulty categories, using all available seeded words');
-          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
-          selectedWords = allAvailable.sort(() => Math.random() - 0.5).slice(0, targetCount);
+        // Second priority: Fill with harder verbs (ranks 101-150)
+        const remaining = targetCount - selectedWords.length;
+        if (remaining > 0 && harderVerbs.length > 0) {
+          const harderToAdd = Math.min(harderVerbs.length, remaining);
+          selectedWords.push(...harderVerbs.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
         }
         
-        // Last resort: If we still don't have enough, fill with any available words (excluding mastered)
+        // Third priority: Use easier verbs only if needed
+        const stillRemaining = targetCount - selectedWords.length;
+        if (stillRemaining > 0 && easierVerbs.length > 0) {
+          const easierToAdd = Math.min(easierVerbs.length, stillRemaining);
+          selectedWords.push(...easierVerbs.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
+        }
+        
+        // Fourth priority: Use adjectives if still need more
+        const stillRemaining2 = targetCount - selectedWords.length;
+        if (stillRemaining2 > 0 && adjectives.length > 0) {
+          const adjToAdd = Math.min(adjectives.length, stillRemaining2);
+          selectedWords.push(...adjectives.sort(() => Math.random() - 0.5).slice(0, adjToAdd));
+        }
+        
+        // Last resort: Use unmatched words
         const finalRemaining = targetCount - selectedWords.length;
-        if (finalRemaining > 0) {
+        if (finalRemaining > 0 && unmatchedWords.length > 0) {
+          const unmatchedToAdd = Math.min(unmatchedWords.length, finalRemaining);
+          selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
+        }
+        
+        // Final fallback: Use any available words
+        if (selectedWords.length < targetCount) {
           const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
           const alreadySelected = new Set(selectedWords.map(w => w.word));
           const moreWords = allAvailable.filter(w => !alreadySelected.has(w.word));
-          selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, finalRemaining));
+          selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, targetCount - selectedWords.length));
         }
         
         const wordsToPractice = selectedWords.slice(0, targetCount);
@@ -1033,11 +1030,11 @@ Be concise and practical. Focus on common, everyday usage.`;
           
           const errorMsg = `No words available for practice.\n\n` +
             `Total seeded words: ${allSeededWords.length}\n` +
-            `Hardest available: ${hardestWords.length}\n` +
-            `Harder available: ${harderWords.length}\n` +
-            `Easier available: ${easierWords.length}\n` +
+            `Hardest verbs (151-230): ${hardestVerbs.length}\n` +
+            `Harder verbs (101-150): ${harderVerbs.length}\n` +
+            `Easier verbs (1-100): ${easierVerbs.length}\n` +
+            `Adjectives: ${adjectives.length}\n` +
             `Unmatched: ${unmatchedWords.length}\n` +
-            `Total learned: ${existingWordSet.size}\n` +
             `Mastered: ${masteredWordSet.size}\n` +
             `Available (not mastered): ${allSeededWords.filter(w => !masteredWordSet.has(w.word)).length}\n\n` +
             `If words aren't seeded, click "Practice Common" again to seed them.`;
