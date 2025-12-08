@@ -741,9 +741,30 @@ Be concise and practical. Focus on common, everyday usage.`;
           return;
         }
 
+        // Create verb rank map for prioritization
+        const verbToRank = new Map();
+        COMMON_VERBS.forEach((v, idx) => verbToRank.set(v.word, idx + 1)); // Rank = index + 1
+        
+        // Sort: hardest verbs first (ranks 151-230), then harder (101-150), then easier (1-100), then adjectives
+        const verbWords = wordsToSeed.filter(w => verbToRank.has(w.word));
+        const adjWords = wordsToSeed.filter(w => !verbToRank.has(w.word));
+        
+        // Sort verbs by rank descending (hardest first)
+        verbWords.sort((a, b) => {
+          const rankA = verbToRank.get(a.word) || 0;
+          const rankB = verbToRank.get(b.word) || 0;
+          return rankB - rankA; // Higher rank (harder) first
+        });
+        
+        // Prioritize: hardest verbs first, then harder verbs, then easier verbs, then adjectives
+        const prioritizedWords = [...verbWords, ...adjWords];
+        
+        console.log(`Seeding ${prioritizedWords.length} total words: ${verbWords.length} verbs (hardest first), ${adjWords.length} adjectives`);
+
         let seeded = 0;
-        for (let i = 0; i < wordsToSeed.length; i++) {
-          const word = wordsToSeed[i];
+        let skipped = 0;
+        for (let i = 0; i < prioritizedWords.length; i++) {
+          const word = prioritizedWords[i];
           const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
           // Check if already exists
@@ -752,12 +773,24 @@ Be concise and practical. Focus on common, everyday usage.`;
           const wordExists = await wordCheck.json();
           
           if (wordExists && wordExists.meaning) {
-            console.log(`Skipping ${word.word} (already seeded)`);
+            skipped++;
+            if (i % 10 === 0 || skipped < 5) { // Log first few and every 10th
+              console.log(`Skipping ${word.word} (already seeded)`);
+            }
             continue;
           }
 
+          // Determine difficulty for logging
+          const verbRank = verbToRank.get(word.word);
+          let difficulty = 'adjective';
+          if (verbRank !== undefined) {
+            if (verbRank >= 151) difficulty = 'hardest';
+            else if (verbRank >= 101) difficulty = 'harder';
+            else difficulty = 'easier';
+          }
+          
           // Generate AI info
-          console.log(`Generating AI info for ${word.word} (${i+1}/${wordsToSeed.length})...`);
+          console.log(`Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}] (${i+1}/${prioritizedWords.length})...`);
           const wordInfo = await generateVerbInfo(word);
           
           if (wordInfo) {
@@ -778,7 +811,9 @@ Be concise and practical. Focus on common, everyday usage.`;
             });
             
             seeded++;
-            console.log(`Seeded ${word.word} (${seeded}/${wordsToSeed.length})`);
+            if (seeded % 10 === 0 || seeded <= 5) { // Log progress
+              console.log(`Seeded ${word.word} [${difficulty}] (${seeded} new, ${skipped} skipped)`);
+            }
             
             // Small delay to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 200));
