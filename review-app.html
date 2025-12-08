@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V39</h1>
+    <h1>📚 Japanese Review V40</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -862,6 +862,14 @@ Be concise and practical. Focus on common, everyday usage.`;
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
         const existingWords = await response.json();
+        
+        // Only filter out words that are mastered, not all learned words
+        const masteredWordSet = existingWords ? new Set(
+          Object.values(existingWords)
+            .filter(w => w.mastered === true)
+            .map(w => w.word)
+        ) : new Set();
+        
         const existingWordSet = existingWords ? new Set(Object.values(existingWords).map(w => w.word)) : new Set();
 
         // Convert seeded words to array and create difficulty-indexed map
@@ -883,7 +891,8 @@ Be concise and practical. Focus on common, everyday usage.`;
         const unmatchedWords = []; // Words that don't match the index (fallback)
         
         allSeededWords.forEach(word => {
-          if (existingWordSet.has(word.word)) return; // Skip already learned
+          // Only skip if mastered, not just learned
+          if (masteredWordSet.has(word.word)) return;
           
           const index = wordToIndex.get(word.word);
           if (index === undefined) {
@@ -901,7 +910,7 @@ Be concise and practical. Focus on common, everyday usage.`;
           }
         });
         
-        console.log(`Word matching: Total seeded: ${allSeededWords.length}, Hardest: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}, Unmatched: ${unmatchedWords.length}, Already learned: ${existingWordSet.size}`);
+        console.log(`Word matching: Total seeded: ${allSeededWords.length}, Hardest: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}, Unmatched: ${unmatchedWords.length}, Total learned: ${existingWordSet.size}, Mastered: ${masteredWordSet.size}`);
         
         const targetCount = 20;
         let selectedWords = [];
@@ -938,16 +947,16 @@ Be concise and practical. Focus on common, everyday usage.`;
             selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
           }
         } else {
-          // No words matched difficulty - just use all available seeded words
+          // No words matched difficulty - just use all available seeded words (excluding mastered)
           console.log('No words matched difficulty categories, using all available seeded words');
-          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
           selectedWords = allAvailable.sort(() => Math.random() - 0.5).slice(0, targetCount);
         }
         
-        // Last resort: If we still don't have enough, fill with any available words
+        // Last resort: If we still don't have enough, fill with any available words (excluding mastered)
         const finalRemaining = targetCount - selectedWords.length;
         if (finalRemaining > 0) {
-          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
           const alreadySelected = new Set(selectedWords.map(w => w.word));
           const moreWords = allAvailable.filter(w => !alreadySelected.has(w.word));
           selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, finalRemaining));
@@ -958,8 +967,8 @@ Be concise and practical. Focus on common, everyday usage.`;
         console.log(`Selected ${wordsToPractice.length} words for practice`);
 
         if (wordsToPractice.length === 0) {
-          // Final fallback: use ALL seeded words that aren't already learned
-          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          // Final fallback: use ALL seeded words that aren't mastered
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
           if (allAvailable.length > 0) {
             console.log(`Using all ${allAvailable.length} available seeded words as final fallback`);
             const wordsToPracticeFallback = allAvailable.sort(() => Math.random() - 0.5).slice(0, 20);
@@ -1028,8 +1037,9 @@ Be concise and practical. Focus on common, everyday usage.`;
             `Harder available: ${harderWords.length}\n` +
             `Easier available: ${easierWords.length}\n` +
             `Unmatched: ${unmatchedWords.length}\n` +
-            `Already learned: ${existingWordSet.size}\n` +
-            `Available (not learned): ${allSeededWords.filter(w => !existingWordSet.has(w.word)).length}\n\n` +
+            `Total learned: ${existingWordSet.size}\n` +
+            `Mastered: ${masteredWordSet.size}\n` +
+            `Available (not mastered): ${allSeededWords.filter(w => !masteredWordSet.has(w.word)).length}\n\n` +
             `If words aren't seeded, click "Practice Common" again to seed them.`;
           alert(errorMsg);
           switchScreen('showListScreen');
