@@ -643,14 +643,27 @@
       currentIndex++; showCurrentCard();
     }
 
-    // Generate meaning and usage pattern for a verb using AI
-    async function generateVerbInfo(verb) {
+    // Generate meaning and usage pattern for a verb using AI (only if not cached)
+    async function generateVerbInfo(verb, cachedWord = null) {
+      // If we have cached word data with meaning and context, use it
+      if (cachedWord && cachedWord.meaning && cachedWord.context) {
+        console.log(`Using cached info for verb: ${verb.word}`);
+        return {
+          meaning: cachedWord.meaning,
+          example: cachedWord.context,
+          exampleTranslation: cachedWord.contextTranslation || ''
+        };
+      }
+
+      // Otherwise, generate with AI
       try {
         const apiKey = localStorage.getItem('openaiApiKey');
         if (!apiKey) { 
           console.error('OpenAI API key not found');
           return null;
         }
+
+        console.log(`Generating AI info for verb: ${verb.word}`);
 
         const prompt = `You are a Japanese language teacher. For the verb "${verb.word}" (reading: ${verb.reading}), provide:
 1. A clear English meaning/translation
@@ -734,28 +747,27 @@ Be concise and practical. Focus on common, everyday usage.`;
           verbsToPractice.push(...COMMON_VERBS.sort(() => Math.random() - 0.5).slice(0, 20));
         }
 
-        // Generate word objects with AI-powered meanings and usage patterns
+        // Generate word objects with AI-powered meanings and usage patterns (cached when possible)
         currentWords = [];
         for (let i = 0; i < verbsToPractice.length; i++) {
           const verb = verbsToPractice[i];
-          const verbInfo = await generateVerbInfo(verb);
+          const wordId = verb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          
+          // Check if word already exists in user's vocabulary
+          const existingWord = existingWords && existingWords[wordId];
+          
+          // Only generate AI info if we don't have cached data
+          const verbInfo = await generateVerbInfo(verb, existingWord);
           
           if (verbInfo) {
-            const wordId = verb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
-            
-            // Check if word already exists in user's vocabulary
-            const existingWord = existingWords && existingWords[wordId];
-            
             if (existingWord) {
-              // Use existing word data but update context if needed
+              // Use existing word data (already cached, no AI call needed)
               currentWords.push({
                 id: wordId,
-                ...existingWord,
-                context: verbInfo.example || existingWord.context,
-                contextTranslation: verbInfo.exampleTranslation || existingWord.contextTranslation
+                ...existingWord
               });
             } else {
-              // Create new word object
+              // Create new word object with AI-generated info
               const newWord = {
                 id: wordId,
                 word: verb.word,
@@ -776,13 +788,14 @@ Be concise and practical. Focus on common, everyday usage.`;
                 mastered: false
               };
               
-              // Save to Firebase immediately
+              // Save to Firebase immediately to cache the AI-generated info
               try {
                 await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(newWord)
                 });
+                console.log(`Cached AI-generated info for verb: ${verb.word}`);
               } catch (error) {
                 console.error('Error saving verb to Firebase:', error);
               }
