@@ -846,28 +846,31 @@ Be concise and practical. Focus on common, everyday usage.`;
           }
         });
         
-        // Select 20 words: at least 50% from harder portion (2nd half)
+        // Select 20 words: Focus heavily on last 25% - at least 50% from there
         const targetCount = 20;
-        const minHardCount = Math.ceil(targetCount * 0.5); // At least 50% hard
+        const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from last 25%
         
         const selectedWords = [];
         
-        // First, add hardest words (last 25%)
-        const hardestToAdd = Math.min(hardestWords.length, Math.floor(targetCount * 0.4));
+        // First priority: Fill at least 50% (10 words) from the hardest words (last 25%)
+        const hardestToAdd = Math.min(hardestWords.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
         selectedWords.push(...hardestWords.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
         
-        // Then add more from harder words (2nd half) to reach minimum
-        const remainingHardNeeded = Math.max(0, minHardCount - selectedWords.length);
-        selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, remainingHardNeeded));
-        
-        // Fill the rest with easier words or more harder words
+        // Second priority: Fill remaining slots from harder words (2nd half, but not last 25%)
         const remaining = targetCount - selectedWords.length;
-        if (remaining > 0) {
-          const allRemaining = [...harderWords.filter(w => !selectedWords.includes(w)), ...easierWords];
-          selectedWords.push(...allRemaining.sort(() => Math.random() - 0.5).slice(0, remaining));
+        if (remaining > 0 && harderWords.length > 0) {
+          const harderToAdd = Math.min(harderWords.length, remaining);
+          selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
         }
         
-        // If we don't have enough, fill with any available words
+        // Third priority: Only if we still need more, use easier words
+        const stillRemaining = targetCount - selectedWords.length;
+        if (stillRemaining > 0 && easierWords.length > 0) {
+          const easierToAdd = Math.min(easierWords.length, stillRemaining);
+          selectedWords.push(...easierWords.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
+        }
+        
+        // Last resort: If we still don't have enough, fill with any available words
         if (selectedWords.length < targetCount) {
           const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
           const alreadySelected = new Set(selectedWords.map(w => w.word));
