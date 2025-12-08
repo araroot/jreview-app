@@ -841,9 +841,9 @@ Be concise and practical. Focus on common, everyday usage.`;
         // Convert seeded words to array and create difficulty-indexed map
         const allSeededWords = Object.values(seededWords);
         
-        // Create a map of word -> index in original COMMON_WORDS list (for difficulty ordering)
+        // Create a map of word -> index in original words list (for difficulty ordering)
         const wordToIndex = new Map();
-        COMMON_WORDS.forEach((w, idx) => wordToIndex.set(w.word, idx));
+        wordsToUse.forEach((w, idx) => wordToIndex.set(w.word, idx));
         
         // Separate into easier (first 50%) and harder (2nd half + last 25%)
         const easierWords = [];
