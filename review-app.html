@@ -723,15 +723,26 @@ Be concise and practical. Focus on common, everyday usage.`;
           return;
         }
 
-        // Get all words from COMMON_WORDS (verbs + adjectives)
-        if (!COMMON_WORDS || COMMON_WORDS.length === 0) {
+        // Get all words (verbs + adjectives)
+        let wordsToSeed = COMMON_WORDS;
+        if (!wordsToSeed || wordsToSeed.length === 0) {
+          // Fallback: combine if COMMON_WORDS wasn't defined
+          if (typeof COMMON_VERBS !== 'undefined' && typeof COMMON_ADJECTIVES !== 'undefined') {
+            wordsToSeed = [...COMMON_VERBS, ...COMMON_ADJECTIVES];
+          } else {
+            alert('Common words data not loaded');
+            return;
+          }
+        }
+        
+        if (!wordsToSeed || wordsToSeed.length === 0) {
           alert('Common words data not loaded');
           return;
         }
 
         let seeded = 0;
-        for (let i = 0; i < COMMON_WORDS.length; i++) {
-          const word = COMMON_WORDS[i];
+        for (let i = 0; i < wordsToSeed.length; i++) {
+          const word = wordsToSeed[i];
           const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
           // Check if already exists
@@ -745,7 +756,7 @@ Be concise and practical. Focus on common, everyday usage.`;
           }
 
           // Generate AI info
-          console.log(`Generating AI info for ${word.word} (${i+1}/${COMMON_WORDS.length})...`);
+          console.log(`Generating AI info for ${word.word} (${i+1}/${wordsToSeed.length})...`);
           const wordInfo = await generateVerbInfo(word);
           
           if (wordInfo) {
@@ -766,7 +777,7 @@ Be concise and practical. Focus on common, everyday usage.`;
             });
             
             seeded++;
-            console.log(`Seeded ${word.word} (${seeded}/${COMMON_WORDS.length})`);
+            console.log(`Seeded ${word.word} (${seeded}/${wordsToSeed.length})`);
             
             // Small delay to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -785,7 +796,19 @@ Be concise and practical. Focus on common, everyday usage.`;
     // Prefers harder words from 2nd half/last 25% of lists
     async function loadCommonVerbsPractice() {
       try {
-        if (!COMMON_WORDS || COMMON_WORDS.length === 0) {
+        // Ensure COMMON_WORDS is available (fallback to combining if needed)
+        let wordsToUse = COMMON_WORDS;
+        if (!wordsToUse || wordsToUse.length === 0) {
+          // Fallback: combine if COMMON_WORDS wasn't defined
+          if (typeof COMMON_VERBS !== 'undefined' && typeof COMMON_ADJECTIVES !== 'undefined') {
+            wordsToUse = [...COMMON_VERBS, ...COMMON_ADJECTIVES];
+          } else {
+            alert('Common words data not loaded. Please refresh the page.');
+            return;
+          }
+        }
+        
+        if (!wordsToUse || wordsToUse.length === 0) {
           alert('Common words data not loaded. Please refresh the page.');
           return;
         }
