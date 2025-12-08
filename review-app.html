@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V43</h1>
+    <h1>📚 Japanese Review V44</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -713,14 +713,15 @@ Be concise and practical. Focus on common, everyday usage.`;
           return;
         }
 
-        // Check if already seeded
+        // Don't skip - continue seeding even if some words exist
+        // This allows seeding all words, not just stopping at first batch
         const checkUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
         const checkResponse = await fetch(checkUrl);
         const existing = await checkResponse.json();
+        const existingCount = existing ? Object.keys(existing).length : 0;
         
-        if (existing && Object.keys(existing).length > 0) {
-          console.log('Common verbs already seeded. Skipping...');
-          return;
+        if (existingCount > 0) {
+          console.log(`Found ${existingCount} already seeded words. Will continue seeding remaining words...`);
         }
 
         // Get all words (verbs + adjectives)
@@ -784,7 +785,7 @@ Be concise and practical. Focus on common, everyday usage.`;
           }
         }
         
-        console.log(`Seeding complete! Seeded ${seeded} words.`);
+        console.log(`Seeding complete! Seeded ${seeded} new words, skipped ${skipped} existing words.`);
         
         // Verify seeding worked
         const verifyUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
@@ -796,7 +797,8 @@ Be concise and practical. Focus on common, everyday usage.`;
           throw new Error('Seeding completed but no words found in database. Please try again.');
         }
         
-        alert(`Successfully seeded ${verifiedCount} common words (verbs + adjectives) with AI usage patterns!\n\nHardest words seeded first, then harder, then easier.`);
+        const totalExpected = COMMON_VERBS.length + COMMON_ADJECTIVES.length;
+        alert(`Seeding complete!\n\nTotal in database: ${verifiedCount} words\nNewly seeded: ${seeded} words\nAlready existed: ${skipped} words\nExpected total: ${totalExpected} words\n\nHardest verbs (151-230) seeded first, then harder (101-150), then easier (1-100), then adjectives.`);
       } catch (error) {
         console.error('Error seeding verbs:', error);
         alert('Error seeding verbs: ' + error.message);
