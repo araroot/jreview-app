@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V38</h1>
+    <h1>📚 Japanese Review V39</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -903,35 +903,45 @@ Be concise and practical. Focus on common, everyday usage.`;
         
         console.log(`Word matching: Total seeded: ${allSeededWords.length}, Hardest: ${hardestWords.length}, Harder: ${harderWords.length}, Easier: ${easierWords.length}, Unmatched: ${unmatchedWords.length}, Already learned: ${existingWordSet.size}`);
         
-        // Select 20 words: Focus heavily on last 25% - at least 50% from there
         const targetCount = 20;
-        const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from last 25%
+        let selectedWords = [];
         
-        const selectedWords = [];
+        // If we have words matched to difficulty categories, use smart selection
+        const totalMatched = hardestWords.length + harderWords.length + easierWords.length;
         
-        // First priority: Fill at least 50% (10 words) from the hardest words (last 25%)
-        const hardestToAdd = Math.min(hardestWords.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
-        selectedWords.push(...hardestWords.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
-        
-        // Second priority: Fill remaining slots from harder words (2nd half, but not last 25%)
-        const remaining = targetCount - selectedWords.length;
-        if (remaining > 0 && harderWords.length > 0) {
-          const harderToAdd = Math.min(harderWords.length, remaining);
-          selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
-        }
-        
-        // Third priority: Only if we still need more, use easier words
-        const stillRemaining = targetCount - selectedWords.length;
-        if (stillRemaining > 0 && easierWords.length > 0) {
-          const easierToAdd = Math.min(easierWords.length, stillRemaining);
-          selectedWords.push(...easierWords.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
-        }
-        
-        // Fourth priority: Use unmatched words (words not in difficulty index)
-        const stillRemaining2 = targetCount - selectedWords.length;
-        if (stillRemaining2 > 0 && unmatchedWords.length > 0) {
-          const unmatchedToAdd = Math.min(unmatchedWords.length, stillRemaining2);
-          selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
+        if (totalMatched > 0) {
+          // Smart selection based on difficulty
+          const minHardestCount = Math.ceil(targetCount * 0.5); // At least 50% from last 25%
+          
+          // First priority: Fill at least 50% (10 words) from the hardest words (last 25%)
+          const hardestToAdd = Math.min(hardestWords.length, Math.max(minHardestCount, Math.floor(targetCount * 0.6)));
+          selectedWords.push(...hardestWords.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
+          
+          // Second priority: Fill remaining slots from harder words (2nd half, but not last 25%)
+          const remaining = targetCount - selectedWords.length;
+          if (remaining > 0 && harderWords.length > 0) {
+            const harderToAdd = Math.min(harderWords.length, remaining);
+            selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, harderToAdd));
+          }
+          
+          // Third priority: Only if we still need more, use easier words
+          const stillRemaining = targetCount - selectedWords.length;
+          if (stillRemaining > 0 && easierWords.length > 0) {
+            const easierToAdd = Math.min(easierWords.length, stillRemaining);
+            selectedWords.push(...easierWords.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
+          }
+          
+          // Fourth priority: Use unmatched words (words not in difficulty index)
+          const stillRemaining2 = targetCount - selectedWords.length;
+          if (stillRemaining2 > 0 && unmatchedWords.length > 0) {
+            const unmatchedToAdd = Math.min(unmatchedWords.length, stillRemaining2);
+            selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
+          }
+        } else {
+          // No words matched difficulty - just use all available seeded words
+          console.log('No words matched difficulty categories, using all available seeded words');
+          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          selectedWords = allAvailable.sort(() => Math.random() - 0.5).slice(0, targetCount);
         }
         
         // Last resort: If we still don't have enough, fill with any available words
@@ -948,73 +958,67 @@ Be concise and practical. Focus on common, everyday usage.`;
         console.log(`Selected ${wordsToPractice.length} words for practice`);
 
         if (wordsToPractice.length === 0) {
-          // If we have unmatched words, use those instead
-          if (unmatchedWords.length > 0) {
-            console.log('Using unmatched words as fallback');
-            const wordsToUse = unmatchedWords.filter(w => !existingWordSet.has(w.word))
-              .sort(() => Math.random() - 0.5)
-              .slice(0, Math.min(20, unmatchedWords.length));
+          // Final fallback: use ALL seeded words that aren't already learned
+          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          if (allAvailable.length > 0) {
+            console.log(`Using all ${allAvailable.length} available seeded words as final fallback`);
+            const wordsToPracticeFallback = allAvailable.sort(() => Math.random() - 0.5).slice(0, 20);
             
-            if (wordsToUse.length > 0) {
-              // Continue with unmatched words
-              const wordsToPracticeFallback = wordsToUse;
-              // Process these words (code continues below)
-              currentWords = [];
-              for (let i = 0; i < wordsToPracticeFallback.length; i++) {
-                const seededWord = wordsToPracticeFallback[i];
-                const wordId = seededWord.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+            currentWords = [];
+            for (let i = 0; i < wordsToPracticeFallback.length; i++) {
+              const seededWord = wordsToPracticeFallback[i];
+              const wordId = seededWord.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+              
+              const existingWord = existingWords && existingWords[wordId];
+              
+              if (existingWord) {
+                currentWords.push({ id: wordId, ...existingWord });
+              } else {
+                const newWord = {
+                  id: wordId,
+                  word: seededWord.word,
+                  reading: seededWord.reading,
+                  meaning: seededWord.meaning,
+                  context: seededWord.context,
+                  contextTranslation: seededWord.contextTranslation,
+                  platform: 'common_words',
+                  show: 'Common Words',
+                  season: null,
+                  episode: null,
+                  savedAt: Date.now(),
+                  lastReviewed: null,
+                  nextReview: Date.now(),
+                  reviewCount: 0,
+                  difficulty: 'new',
+                  timesEncountered: 1,
+                  mastered: false
+                };
                 
-                const existingWord = existingWords && existingWords[wordId];
-                
-                if (existingWord) {
-                  currentWords.push({ id: wordId, ...existingWord });
-                } else {
-                  const newWord = {
-                    id: wordId,
-                    word: seededWord.word,
-                    reading: seededWord.reading,
-                    meaning: seededWord.meaning,
-                    context: seededWord.context,
-                    contextTranslation: seededWord.contextTranslation,
-                    platform: 'common_words',
-                    show: 'Common Words',
-                    season: null,
-                    episode: null,
-                    savedAt: Date.now(),
-                    lastReviewed: null,
-                    nextReview: Date.now(),
-                    reviewCount: 0,
-                    difficulty: 'new',
-                    timesEncountered: 1,
-                    mastered: false
-                  };
-                  
-                  try {
-                    await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(newWord)
-                    });
-                  } catch (error) {
-                    console.error('Error saving word to Firebase:', error);
-                  }
-                  
-                  currentWords.push(newWord);
+                try {
+                  await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newWord)
+                  });
+                } catch (error) {
+                  console.error('Error saving word to Firebase:', error);
                 }
                 
-                const progress = ((i + 1) / wordsToPracticeFallback.length) * 100;
-                document.getElementById('progressFill').style.width = progress + '%';
+                currentWords.push(newWord);
               }
               
-              if (currentWords.length > 0) {
-                sessionStats = { hard: 0, good: 0, easy: 0, deleted: 0, total: 0 };
-                currentIndex = 0;
-                reviewedToday = 0;
-                document.getElementById('dueCount').textContent = currentWords.length;
-                document.getElementById('reviewedCount').textContent = 0;
-                showCurrentCard();
-                return;
-              }
+              const progress = ((i + 1) / wordsToPracticeFallback.length) * 100;
+              document.getElementById('progressFill').style.width = progress + '%';
+            }
+            
+            if (currentWords.length > 0) {
+              sessionStats = { hard: 0, good: 0, easy: 0, deleted: 0, total: 0 };
+              currentIndex = 0;
+              reviewedToday = 0;
+              document.getElementById('dueCount').textContent = currentWords.length;
+              document.getElementById('reviewedCount').textContent = 0;
+              showCurrentCard();
+              return;
             }
           }
           
@@ -1024,7 +1028,8 @@ Be concise and practical. Focus on common, everyday usage.`;
             `Harder available: ${harderWords.length}\n` +
             `Easier available: ${easierWords.length}\n` +
             `Unmatched: ${unmatchedWords.length}\n` +
-            `Already learned: ${existingWordSet.size}\n\n` +
+            `Already learned: ${existingWordSet.size}\n` +
+            `Available (not learned): ${allSeededWords.filter(w => !existingWordSet.has(w.word)).length}\n\n` +
             `If words aren't seeded, click "Practice Common" again to seed them.`;
           alert(errorMsg);
           switchScreen('showListScreen');
