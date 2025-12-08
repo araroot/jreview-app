@@ -99,7 +99,7 @@
       <h2>Choose a Show 📺</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
       <button class="login-btn" id="reviewAllShows" style="margin-bottom: 15px; background: linear-gradient(135deg, #10b981, #059669); font-size: 16px;">📅 Review All Shows (Due: <span id="allShowsDueCount">0</span>)</button>
-      <button class="login-btn" id="practiceCommonVerbs" style="margin-bottom: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 16px;">🔥 Practice Common Verbs</button>
+      <button class="login-btn" id="practiceCommonVerbs" style="margin-bottom: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 16px;">🔥 Practice Common</button>
       <div id="showList" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;"></div>
     </div>
 
@@ -723,114 +723,165 @@ Be concise and practical. Focus on common, everyday usage.`;
           return;
         }
 
-        // Get all verbs from COMMON_VERBS
-        if (!COMMON_VERBS || COMMON_VERBS.length === 0) {
-          alert('Common verbs data not loaded');
+        // Get all words from COMMON_WORDS (verbs + adjectives)
+        if (!COMMON_WORDS || COMMON_WORDS.length === 0) {
+          alert('Common words data not loaded');
           return;
         }
 
         let seeded = 0;
-        for (let i = 0; i < COMMON_VERBS.length; i++) {
-          const verb = COMMON_VERBS[i];
-          const verbId = verb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+        for (let i = 0; i < COMMON_WORDS.length; i++) {
+          const word = COMMON_WORDS[i];
+          const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
           // Check if already exists
-          const verbUrl = `${firebaseConfig.databaseURL}/commonVerbs/${verbId}.json`;
-          const verbCheck = await fetch(verbUrl);
-          const verbExists = await verbCheck.json();
+          const wordUrl = `${firebaseConfig.databaseURL}/commonVerbs/${wordId}.json`;
+          const wordCheck = await fetch(wordUrl);
+          const wordExists = await wordCheck.json();
           
-          if (verbExists && verbExists.meaning) {
-            console.log(`Skipping ${verb.word} (already seeded)`);
+          if (wordExists && wordExists.meaning) {
+            console.log(`Skipping ${word.word} (already seeded)`);
             continue;
           }
 
           // Generate AI info
-          console.log(`Generating AI info for ${verb.word} (${i+1}/${COMMON_VERBS.length})...`);
-          const verbInfo = await generateVerbInfo(verb);
+          console.log(`Generating AI info for ${word.word} (${i+1}/${COMMON_WORDS.length})...`);
+          const wordInfo = await generateVerbInfo(word);
           
-          if (verbInfo) {
-            const verbData = {
-              word: verb.word,
-              reading: verb.reading,
-              meaning: verbInfo.meaning,
-              context: verbInfo.example,
-              contextTranslation: verbInfo.exampleTranslation,
+          if (wordInfo) {
+            const wordData = {
+              word: word.word,
+              reading: word.reading,
+              meaning: wordInfo.meaning,
+              context: wordInfo.example,
+              contextTranslation: wordInfo.exampleTranslation,
               seededAt: Date.now()
             };
             
             // Save to Firebase
-            await fetch(verbUrl, {
+            await fetch(wordUrl, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(verbData)
+              body: JSON.stringify(wordData)
             });
             
             seeded++;
-            console.log(`Seeded ${verb.word} (${seeded}/${COMMON_VERBS.length})`);
+            console.log(`Seeded ${word.word} (${seeded}/${COMMON_WORDS.length})`);
             
             // Small delay to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 200));
           }
         }
         
-        console.log(`Seeding complete! Seeded ${seeded} verbs.`);
-        alert(`Seeded ${seeded} common verbs with AI usage patterns!`);
+        console.log(`Seeding complete! Seeded ${seeded} words.`);
+        alert(`Seeded ${seeded} common words (verbs + adjectives) with AI usage patterns!`);
       } catch (error) {
         console.error('Error seeding verbs:', error);
         alert('Error seeding verbs: ' + error.message);
       }
     }
 
-    // Load common verbs practice session (loads from Firebase, no AI calls)
+    // Load common words practice session (loads from Firebase, no AI calls)
+    // Prefers harder words from 2nd half/last 25% of lists
     async function loadCommonVerbsPractice() {
       try {
-        if (!COMMON_VERBS || COMMON_VERBS.length === 0) {
-          alert('Common verbs data not loaded. Please refresh the page.');
+        if (!COMMON_WORDS || COMMON_WORDS.length === 0) {
+          alert('Common words data not loaded. Please refresh the page.');
           return;
         }
 
         // Show loading message
         switchScreen('reviewScreen');
-        document.getElementById('wordFront').textContent = 'Loading verbs...';
+        document.getElementById('wordFront').textContent = 'Loading words...';
         document.getElementById('contextDisplay').textContent = 'Loading from database...';
 
-        // Load all seeded verbs from Firebase
+        // Load all seeded words from Firebase
         const seedUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
         const seedResponse = await fetch(seedUrl);
-        const seededVerbs = await seedResponse.json();
+        const seededWords = await seedResponse.json();
 
-        if (!seededVerbs || Object.keys(seededVerbs).length === 0) {
+        if (!seededWords || Object.keys(seededWords).length === 0) {
           // Not seeded yet - seed them now
-          alert('Common verbs not seeded yet. Seeding now (this will take a few minutes)...');
+          alert('Common words not seeded yet. Seeding now (this will take a few minutes)...');
           await seedCommonVerbs();
           // Reload after seeding
           await loadCommonVerbsPractice();
           return;
         }
 
-        // Get user's existing words to check which verbs they've already learned
+        // Get user's existing words to check which words they've already learned
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
         const existingWords = await response.json();
         const existingWordSet = existingWords ? new Set(Object.values(existingWords).map(w => w.word)) : new Set();
 
-        // Convert seeded verbs to array and filter
-        const allSeededVerbs = Object.values(seededVerbs);
-        const verbsToPractice = allSeededVerbs
-          .filter(v => !existingWordSet.has(v.word)) // Prefer verbs not already learned
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 20);
-
-        if (verbsToPractice.length === 0) {
-          // If all verbs are already learned, just pick random ones
-          verbsToPractice.push(...allSeededVerbs.sort(() => Math.random() - 0.5).slice(0, 20));
+        // Convert seeded words to array and create difficulty-indexed map
+        const allSeededWords = Object.values(seededWords);
+        
+        // Create a map of word -> index in original COMMON_WORDS list (for difficulty ordering)
+        const wordToIndex = new Map();
+        COMMON_WORDS.forEach((w, idx) => wordToIndex.set(w.word, idx));
+        
+        // Separate into easier (first 50%) and harder (2nd half + last 25%)
+        const easierWords = [];
+        const harderWords = [];
+        const hardestWords = [];
+        
+        const totalLength = COMMON_WORDS.length;
+        const halfPoint = Math.floor(totalLength / 2);
+        const lastQuarterStart = Math.floor(totalLength * 0.75);
+        
+        allSeededWords.forEach(word => {
+          if (existingWordSet.has(word.word)) return; // Skip already learned
+          
+          const index = wordToIndex.get(word.word);
+          if (index === undefined) return; // Skip if not in original list
+          
+          if (index >= lastQuarterStart) {
+            hardestWords.push(word);
+          } else if (index >= halfPoint) {
+            harderWords.push(word);
+          } else {
+            easierWords.push(word);
+          }
+        });
+        
+        // Select 20 words: at least 50% from harder portion (2nd half)
+        const targetCount = 20;
+        const minHardCount = Math.ceil(targetCount * 0.5); // At least 50% hard
+        
+        const selectedWords = [];
+        
+        // First, add hardest words (last 25%)
+        const hardestToAdd = Math.min(hardestWords.length, Math.floor(targetCount * 0.4));
+        selectedWords.push(...hardestWords.sort(() => Math.random() - 0.5).slice(0, hardestToAdd));
+        
+        // Then add more from harder words (2nd half) to reach minimum
+        const remainingHardNeeded = Math.max(0, minHardCount - selectedWords.length);
+        selectedWords.push(...harderWords.sort(() => Math.random() - 0.5).slice(0, remainingHardNeeded));
+        
+        // Fill the rest with easier words or more harder words
+        const remaining = targetCount - selectedWords.length;
+        if (remaining > 0) {
+          const allRemaining = [...harderWords.filter(w => !selectedWords.includes(w)), ...easierWords];
+          selectedWords.push(...allRemaining.sort(() => Math.random() - 0.5).slice(0, remaining));
         }
+        
+        // If we don't have enough, fill with any available words
+        if (selectedWords.length < targetCount) {
+          const allAvailable = allSeededWords.filter(w => !existingWordSet.has(w.word));
+          const alreadySelected = new Set(selectedWords.map(w => w.word));
+          const moreWords = allAvailable.filter(w => !alreadySelected.has(w.word));
+          selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, targetCount - selectedWords.length));
+        }
+        
+        const wordsToPractice = selectedWords.slice(0, targetCount);
 
         // Create word objects from seeded data (no AI calls needed!)
         currentWords = [];
-        for (let i = 0; i < verbsToPractice.length; i++) {
-          const seededVerb = verbsToPractice[i];
-          const wordId = seededVerb.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+        for (let i = 0; i < wordsToPractice.length; i++) {
+          const seededWord = wordsToPractice[i];
+          const wordId = seededWord.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
           // Check if word already exists in user's vocabulary
           const existingWord = existingWords && existingWords[wordId];
@@ -845,13 +896,13 @@ Be concise and practical. Focus on common, everyday usage.`;
             // Create new word object from seeded data
             const newWord = {
               id: wordId,
-              word: seededVerb.word,
-              reading: seededVerb.reading,
-              meaning: seededVerb.meaning,
-              context: seededVerb.context,
-              contextTranslation: seededVerb.contextTranslation,
-              platform: 'common_verbs',
-              show: 'Common Verbs',
+              word: seededWord.word,
+              reading: seededWord.reading,
+              meaning: seededWord.meaning,
+              context: seededWord.context,
+              contextTranslation: seededWord.contextTranslation,
+              platform: 'common_words',
+              show: 'Common Words',
               season: null,
               episode: null,
               savedAt: Date.now(),
@@ -871,19 +922,19 @@ Be concise and practical. Focus on common, everyday usage.`;
                 body: JSON.stringify(newWord)
               });
             } catch (error) {
-              console.error('Error saving verb to Firebase:', error);
+              console.error('Error saving word to Firebase:', error);
             }
             
             currentWords.push(newWord);
           }
           
           // Update progress indicator
-          const progress = ((i + 1) / verbsToPractice.length) * 100;
+          const progress = ((i + 1) / wordsToPractice.length) * 100;
           document.getElementById('progressFill').style.width = progress + '%';
         }
 
         if (currentWords.length === 0) {
-          alert('Failed to load verbs. Please try again.');
+          alert('Failed to load words. Please try again.');
           switchScreen('showListScreen');
           return;
         }
@@ -897,7 +948,7 @@ Be concise and practical. Focus on common, everyday usage.`;
 
         showCurrentCard();
       } catch (error) {
-        console.error('Error loading common verbs practice:', error);
+        console.error('Error loading common words practice:', error);
         alert('Error: ' + error.message);
         switchScreen('showListScreen');
       }
