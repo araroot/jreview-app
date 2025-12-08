@@ -297,7 +297,8 @@
 
         const showMap = {};
         allWords.forEach(word => {
-          if (word.show) {
+          // Only include words with valid show, season, and episode (exclude Common Verbs)
+          if (word.show && word.season !== null && word.season !== undefined && word.episode !== null && word.episode !== undefined) {
             const key = `${word.show}_S${word.season}E${word.episode}`;
             if (!showMap[key]) showMap[key] = { name: word.show, season: word.season, episode: word.episode, count: 0 };
             showMap[key].count++;
