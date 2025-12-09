@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V44</h1>
+    <h1>📚 Japanese Review V45</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -763,64 +763,88 @@ Be concise and practical. Focus on common, everyday usage.`;
 
         let seeded = 0;
         let skipped = 0;
+        let errors = 0;
+        
+        console.log(`Starting to seed ALL ${prioritizedWords.length} words. This will take several minutes...`);
+        
         for (let i = 0; i < prioritizedWords.length; i++) {
           const word = prioritizedWords[i];
           const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
           
-          // Check if already exists
-          const wordUrl = `${firebaseConfig.databaseURL}/commonVerbs/${wordId}.json`;
-          const wordCheck = await fetch(wordUrl);
-          const wordExists = await wordCheck.json();
-          
-          if (wordExists && wordExists.meaning) {
-            skipped++;
-            if (i % 10 === 0 || skipped < 5) { // Log first few and every 10th
-              console.log(`Skipping ${word.word} (already seeded)`);
+          try {
+            // Check if already exists
+            const wordUrl = `${firebaseConfig.databaseURL}/commonVerbs/${wordId}.json`;
+            const wordCheck = await fetch(wordUrl);
+            const wordExists = await wordCheck.json();
+            
+            if (wordExists && wordExists.meaning) {
+              skipped++;
+              if (i % 50 === 0 || skipped <= 10) { // Log first 10 and every 50th
+                console.log(`[${i+1}/${prioritizedWords.length}] Skipping ${word.word} (already seeded)`);
+              }
+              continue;
             }
-            continue;
-          }
 
-          // Determine difficulty for logging
-          const verbRank = verbToRank.get(word.word);
-          let difficulty = 'adjective';
-          if (verbRank !== undefined) {
-            if (verbRank >= 151) difficulty = 'hardest';
-            else if (verbRank >= 101) difficulty = 'harder';
-            else difficulty = 'easier';
-          }
-          
-          // Generate AI info
-          console.log(`Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}] (${i+1}/${prioritizedWords.length})...`);
-          const wordInfo = await generateVerbInfo(word);
-          
-          if (wordInfo) {
-            const wordData = {
-              word: word.word,
-              reading: word.reading,
-              meaning: wordInfo.meaning,
-              context: wordInfo.example,
-              contextTranslation: wordInfo.exampleTranslation,
-              seededAt: Date.now()
-            };
+            // Determine difficulty for logging
+            const verbRank = verbToRank.get(word.word);
+            let difficulty = 'adjective';
+            if (verbRank !== undefined) {
+              if (verbRank >= 151) difficulty = 'hardest';
+              else if (verbRank >= 101) difficulty = 'harder';
+              else difficulty = 'easier';
+            }
             
-            // Save to Firebase
-            await fetch(wordUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(wordData)
-            });
+            // Generate AI info - continue even if this fails
+            console.log(`[${i+1}/${prioritizedWords.length}] Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}]...`);
+            const wordInfo = await generateVerbInfo(word);
             
-            seeded++;
-            if (seeded % 10 === 0 || seeded <= 5) { // Log progress
-              console.log(`Seeded ${word.word} [${difficulty}] (${seeded} new, ${skipped} skipped)`);
+            if (wordInfo) {
+              const wordData = {
+                word: word.word,
+                reading: word.reading,
+                meaning: wordInfo.meaning,
+                context: wordInfo.example,
+                contextTranslation: wordInfo.exampleTranslation,
+                seededAt: Date.now()
+              };
+              
+              // Save to Firebase
+              const saveResponse = await fetch(wordUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(wordData)
+              });
+              
+              if (saveResponse.ok) {
+                seeded++;
+                // Log every 10th word or first 10
+                if (seeded % 10 === 0 || seeded <= 10) {
+                  console.log(`✓ Seeded ${word.word} [${difficulty}] - Progress: ${seeded} new, ${skipped} skipped, ${errors} errors`);
+                }
+              } else {
+                errors++;
+                console.error(`✗ Failed to save ${word.word}: ${saveResponse.status}`);
+              }
+            } else {
+              errors++;
+              console.error(`✗ Failed to generate AI info for ${word.word}`);
             }
             
             // Small delay to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            errors++;
+            console.error(`✗ Error processing ${word.word}:`, error);
+            // Continue with next word even if this one fails
+            continue;
           }
         }
         
-        console.log(`Seeding complete! Seeded ${seeded} new words, skipped ${skipped} existing words.`);
+        console.log(`\n=== SEEDING COMPLETE ===`);
+        console.log(`Total words processed: ${prioritizedWords.length}`);
+        console.log(`Newly seeded: ${seeded}`);
+        console.log(`Already existed: ${skipped}`);
+        console.log(`Errors: ${errors}`);
         
         // Verify seeding worked
         const verifyUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
@@ -828,12 +852,24 @@ Be concise and practical. Focus on common, everyday usage.`;
         const verified = await verifyResponse.json();
         const verifiedCount = verified ? Object.keys(verified).length : 0;
         
+        const totalExpected = COMMON_VERBS.length + COMMON_ADJECTIVES.length;
+        const totalProcessed = seeded + skipped;
+        
         if (verifiedCount === 0) {
           throw new Error('Seeding completed but no words found in database. Please try again.');
         }
         
-        const totalExpected = COMMON_VERBS.length + COMMON_ADJECTIVES.length;
-        alert(`Seeding complete!\n\nTotal in database: ${verifiedCount} words\nNewly seeded: ${seeded} words\nAlready existed: ${skipped} words\nExpected total: ${totalExpected} words\n\nHardest verbs (151-230) seeded first, then harder (101-150), then easier (1-100), then adjectives.`);
+        const message = `SEEDING COMPLETE!\n\n` +
+          `Total expected: ${totalExpected} words\n` +
+          `Total in database: ${verifiedCount} words\n` +
+          `Newly seeded: ${seeded} words\n` +
+          `Already existed: ${skipped} words\n` +
+          `Errors: ${errors} words\n` +
+          `Processed: ${totalProcessed}/${prioritizedWords.length}\n\n` +
+          `Hardest verbs (151-230) seeded first, then harder (101-150), then easier (1-100), then adjectives.`;
+        
+        console.log(message);
+        alert(message);
       } catch (error) {
         console.error('Error seeding verbs:', error);
         alert('Error seeding verbs: ' + error.message);
