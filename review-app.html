@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V45</h1>
+    <h1>📚 Japanese Review V46</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -765,11 +765,22 @@ Be concise and practical. Focus on common, everyday usage.`;
         let skipped = 0;
         let errors = 0;
         
-        console.log(`Starting to seed ALL ${prioritizedWords.length} words. This will take several minutes...`);
+        const totalToProcess = prioritizedWords.length;
+        console.log(`Starting to seed ALL ${totalToProcess} words. This will take 10-15 minutes...`);
+        
+        // Update progress indicator
+        const updateProgress = () => {
+          const progress = ((seeded + skipped + errors) / totalToProcess) * 100;
+          document.getElementById('progressFill').style.width = progress + '%';
+          document.getElementById('contextDisplay').textContent = `Processing word ${seeded + skipped + errors}/${totalToProcess}... Seeded: ${seeded}, Skipped: ${skipped}, Errors: ${errors}`;
+        };
         
         for (let i = 0; i < prioritizedWords.length; i++) {
           const word = prioritizedWords[i];
           const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          
+          // Update progress
+          updateProgress();
           
           try {
             // Check if already exists
@@ -780,7 +791,7 @@ Be concise and practical. Focus on common, everyday usage.`;
             if (wordExists && wordExists.meaning) {
               skipped++;
               if (i % 50 === 0 || skipped <= 10) { // Log first 10 and every 50th
-                console.log(`[${i+1}/${prioritizedWords.length}] Skipping ${word.word} (already seeded)`);
+                console.log(`[${i+1}/${totalToProcess}] Skipping ${word.word} (already seeded)`);
               }
               continue;
             }
@@ -795,7 +806,7 @@ Be concise and practical. Focus on common, everyday usage.`;
             }
             
             // Generate AI info - continue even if this fails
-            console.log(`[${i+1}/${prioritizedWords.length}] Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}]...`);
+            console.log(`[${i+1}/${totalToProcess}] Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}]...`);
             const wordInfo = await generateVerbInfo(word);
             
             if (wordInfo) {
@@ -821,13 +832,16 @@ Be concise and practical. Focus on common, everyday usage.`;
                 if (seeded % 10 === 0 || seeded <= 10) {
                   console.log(`✓ Seeded ${word.word} [${difficulty}] - Progress: ${seeded} new, ${skipped} skipped, ${errors} errors`);
                 }
+                updateProgress(); // Update progress after seeding
               } else {
                 errors++;
                 console.error(`✗ Failed to save ${word.word}: ${saveResponse.status}`);
+                updateProgress();
               }
             } else {
               errors++;
               console.error(`✗ Failed to generate AI info for ${word.word}`);
+              updateProgress();
             }
             
             // Small delay to avoid rate limits
@@ -839,6 +853,10 @@ Be concise and practical. Focus on common, everyday usage.`;
             continue;
           }
         }
+        
+        // Final progress update
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('contextDisplay').textContent = 'Seeding complete! Verifying...';
         
         console.log(`\n=== SEEDING COMPLETE ===`);
         console.log(`Total words processed: ${prioritizedWords.length}`);
@@ -907,16 +925,21 @@ Be concise and practical. Focus on common, everyday usage.`;
         const seedResponse = await fetch(seedUrl);
         const seededWords = await seedResponse.json();
 
-        if (!seededWords || Object.keys(seededWords).length === 0) {
-          // Not seeded yet - seed them now
-          const shouldSeed = confirm('Common words not seeded yet. Would you like to seed them now?\n\nThis will take a few minutes and requires your OpenAI API key.');
+        const totalExpected = (COMMON_VERBS ? COMMON_VERBS.length : 0) + (COMMON_ADJECTIVES ? COMMON_ADJECTIVES.length : 0);
+        const currentCount = seededWords ? Object.keys(seededWords).length : 0;
+        
+        if (!seededWords || currentCount < totalExpected) {
+          // Not fully seeded - seed them now
+          const shouldSeed = confirm(`Common words not fully seeded.\n\nExpected: ${totalExpected} words\nFound: ${currentCount} words\nMissing: ${totalExpected - currentCount} words\n\nWould you like to seed ALL remaining words now?\n\nThis will take 10-15 minutes and requires your OpenAI API key.`);
           if (!shouldSeed) {
             switchScreen('showListScreen');
             return;
           }
           
-          document.getElementById('wordFront').textContent = 'Seeding words...';
-          document.getElementById('contextDisplay').textContent = 'This will take a few minutes. Please wait...';
+          switchScreen('reviewScreen');
+          document.getElementById('wordFront').textContent = 'Seeding ALL words...';
+          document.getElementById('contextDisplay').textContent = `Processing ${totalExpected} words. This will take 10-15 minutes. Please wait...`;
+          document.getElementById('progressFill').style.width = '0%';
           
           try {
             await seedCommonVerbs();
