@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V33</h1>
+    <h1>📚 Japanese Review V47</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -98,7 +98,8 @@
     <div class="login-screen" id="showListScreen" style="display: none;">
       <h2>Choose a Show 📺</h2>
       <p style="margin-bottom: 20px; font-size: 14px;">Select a show to review its vocabulary</p>
-      <button class="login-btn" id="reviewAllShows" style="margin-bottom: 20px; background: linear-gradient(135deg, #10b981, #059669); font-size: 16px;">📅 Review All Shows (Due: <span id="allShowsDueCount">0</span>)</button>
+      <button class="login-btn" id="reviewAllShows" style="margin-bottom: 15px; background: linear-gradient(135deg, #10b981, #059669); font-size: 16px;">📅 Review All Shows (Due: <span id="allShowsDueCount">0</span>)</button>
+      <button class="login-btn" id="practiceCommonVerbs" style="margin-bottom: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); font-size: 16px;">🔥 Practice Common</button>
       <div id="showList" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;"></div>
     </div>
 
@@ -119,8 +120,6 @@
             <button class="delete-btn" id="deleteBtnFront" title="Delete this word">🗑️</button>
             <div class="word-front" id="wordFront"></div>
             <div class="context" id="contextDisplay"></div>
-            <div class="hint">Tap to reveal meaning</div>
-            <div class="tap-indicator">👆 Tap card to see answer</div>
           </div>
           <div class="card-back">
             <div class="answer">
@@ -171,6 +170,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="js/common-verbs.js"></script>
 
   <script>
     // Firebase Configuration
@@ -260,6 +260,10 @@
       await loadWords();
     });
 
+    document.getElementById('practiceCommonVerbs').addEventListener('click', async () => {
+      await loadCommonVerbsPractice();
+    });
+
     document.getElementById('backToShowsBtn').addEventListener('click', () => {
       switchScreen('showListScreen');
     });
@@ -293,7 +297,8 @@
 
         const showMap = {};
         allWords.forEach(word => {
-          if (word.show) {
+          // Only include words with valid show, season, and episode (exclude Common Words)
+          if (word.show && word.season !== null && word.season !== undefined && word.episode !== null && word.episode !== undefined) {
             const key = `${word.show}_S${word.season}E${word.episode}`;
             if (!showMap[key]) showMap[key] = { name: word.show, season: word.season, episode: word.episode, count: 0 };
             showMap[key].count++;
@@ -635,6 +640,562 @@
       sessionStats[difficulty]++; sessionStats.total++; reviewedToday++;
       document.getElementById('reviewedCount').textContent = reviewedToday;
       currentIndex++; showCurrentCard();
+    }
+
+    // Generate meaning and usage pattern for a verb using AI
+    async function generateVerbInfo(verb) {
+      try {
+        const apiKey = localStorage.getItem('openaiApiKey');
+        if (!apiKey) { 
+          console.error('OpenAI API key not found');
+          return null;
+        }
+
+        const prompt = `You are a Japanese language teacher. For the verb "${verb.word}" (reading: ${verb.reading}), provide:
+1. A clear English meaning/translation
+2. A natural Japanese example sentence using this verb
+3. The English translation of that example sentence
+
+Return ONLY a JSON object in this exact format:
+{
+  "meaning": "to do something / meaning in English",
+  "example": "自然な日本語の例文",
+  "exampleTranslation": "English translation of the example"
+}
+
+Be concise and practical. Focus on common, everyday usage.`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${apiKey}` 
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+            max_tokens: 300
+          })
+        });
+
+        if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+
+        const data = await response.json();
+        let aiResponse = data.choices[0].message.content.trim();
+        
+        // Clean JSON response
+        if (aiResponse.startsWith('```json')) {
+          aiResponse = aiResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
+        } else if (aiResponse.startsWith('```')) {
+          aiResponse = aiResponse.replace(/^```\n/, '').replace(/\n```$/, '');
+        }
+
+        const verbInfo = JSON.parse(aiResponse);
+        return verbInfo;
+      } catch (error) {
+        console.error('Error generating verb info:', error);
+        return {
+          meaning: `to ${verb.word}`,
+          example: `${verb.word}ます`,
+          exampleTranslation: `Example with ${verb.word}`
+        };
+      }
+    }
+
+    // Seed Firebase with all common verbs and their AI-generated info (run once)
+    async function seedCommonVerbs() {
+      try {
+        console.log('Starting to seed common verbs...');
+        const apiKey = localStorage.getItem('openaiApiKey');
+        if (!apiKey) {
+          alert('OpenAI API key required to seed verbs');
+          return;
+        }
+
+        // Don't skip - continue seeding even if some words exist
+        const checkUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const checkResponse = await fetch(checkUrl);
+        const existing = await checkResponse.json();
+        const existingCount = existing ? Object.keys(existing).length : 0;
+        
+        if (existingCount > 0) {
+          console.log(`Found ${existingCount} already seeded words. Will continue seeding remaining words...`);
+        }
+
+        // Get all words (verbs + adjectives)
+        let wordsToSeed = COMMON_WORDS;
+        if (!wordsToSeed || wordsToSeed.length === 0) {
+          if (typeof COMMON_VERBS !== 'undefined' && typeof COMMON_ADJECTIVES !== 'undefined') {
+            wordsToSeed = [...COMMON_VERBS, ...COMMON_ADJECTIVES];
+          } else {
+            alert('Common words data not loaded');
+            return;
+          }
+        }
+        
+        if (!wordsToSeed || wordsToSeed.length === 0) {
+          alert('Common words data not loaded');
+          return;
+        }
+
+        // Create verb rank map for prioritization
+        const verbToRank = new Map();
+        COMMON_VERBS.forEach((v, idx) => verbToRank.set(v.word, idx + 1));
+        
+        // Sort: hardest verbs first (ranks 151-230), then harder (101-150), then easier (1-100), then adjectives
+        const verbWords = wordsToSeed.filter(w => verbToRank.has(w.word));
+        const adjWords = wordsToSeed.filter(w => !verbToRank.has(w.word));
+        
+        verbWords.sort((a, b) => {
+          const rankA = verbToRank.get(a.word) || 0;
+          const rankB = verbToRank.get(b.word) || 0;
+          return rankB - rankA;
+        });
+        
+        const prioritizedWords = [...verbWords, ...adjWords];
+        console.log(`Seeding ${prioritizedWords.length} total words: ${verbWords.length} verbs (hardest first), ${adjWords.length} adjectives`);
+
+        let seeded = 0;
+        let skipped = 0;
+        let errors = 0;
+        const totalToProcess = prioritizedWords.length;
+        console.log(`Starting to seed ALL ${totalToProcess} words. This will take 10-15 minutes...`);
+        
+        const updateProgress = () => {
+          const progress = ((seeded + skipped + errors) / totalToProcess) * 100;
+          document.getElementById('progressFill').style.width = progress + '%';
+          document.getElementById('contextDisplay').textContent = `Processing word ${seeded + skipped + errors}/${totalToProcess}... Seeded: ${seeded}, Skipped: ${skipped}, Errors: ${errors}`;
+        };
+        
+        for (let i = 0; i < prioritizedWords.length; i++) {
+          const word = prioritizedWords[i];
+          const wordId = word.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          updateProgress();
+          
+          try {
+            const wordUrl = `${firebaseConfig.databaseURL}/commonVerbs/${wordId}.json`;
+            const wordCheck = await fetch(wordUrl);
+            const wordExists = await wordCheck.json();
+            
+            if (wordExists && wordExists.meaning) {
+              skipped++;
+              if (i % 50 === 0 || skipped <= 10) {
+                console.log(`[${i+1}/${totalToProcess}] Skipping ${word.word} (already seeded)`);
+              }
+              continue;
+            }
+
+            const verbRank = verbToRank.get(word.word);
+            let difficulty = 'adjective';
+            if (verbRank !== undefined) {
+              if (verbRank >= 151) difficulty = 'hardest';
+              else if (verbRank >= 101) difficulty = 'harder';
+              else difficulty = 'easier';
+            }
+            
+            console.log(`[${i+1}/${totalToProcess}] Generating AI info for ${word.word} [${difficulty}, rank ${verbRank || 'N/A'}]...`);
+            const wordInfo = await generateVerbInfo(word);
+            
+            if (wordInfo) {
+              const wordData = {
+                word: word.word,
+                reading: word.reading,
+                meaning: wordInfo.meaning,
+                context: wordInfo.example,
+                contextTranslation: wordInfo.exampleTranslation,
+                seededAt: Date.now()
+              };
+              
+              const saveResponse = await fetch(wordUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(wordData)
+              });
+              
+              if (saveResponse.ok) {
+                seeded++;
+                if (seeded % 10 === 0 || seeded <= 10) {
+                  console.log(`✓ Seeded ${word.word} [${difficulty}] - Progress: ${seeded} new, ${skipped} skipped, ${errors} errors`);
+                }
+                updateProgress();
+              } else {
+                errors++;
+                console.error(`✗ Failed to save ${word.word}: ${saveResponse.status}`);
+                updateProgress();
+              }
+            } else {
+              errors++;
+              console.error(`✗ Failed to generate AI info for ${word.word}`);
+              updateProgress();
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            errors++;
+            console.error(`✗ Error processing ${word.word}:`, error);
+            continue;
+          }
+        }
+        
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('contextDisplay').textContent = 'Seeding complete! Verifying...';
+        
+        console.log(`\n=== SEEDING COMPLETE ===`);
+        console.log(`Total words processed: ${prioritizedWords.length}`);
+        console.log(`Newly seeded: ${seeded}`);
+        console.log(`Already existed: ${skipped}`);
+        console.log(`Errors: ${errors}`);
+        
+        const verifyUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const verifyResponse = await fetch(verifyUrl);
+        const verified = await verifyResponse.json();
+        const verifiedCount = verified ? Object.keys(verified).length : 0;
+        const totalExpected = COMMON_VERBS.length + COMMON_ADJECTIVES.length;
+        const totalProcessed = seeded + skipped;
+        
+        if (verifiedCount === 0) {
+          throw new Error('Seeding completed but no words found in database. Please try again.');
+        }
+        
+        const message = `SEEDING COMPLETE!\n\n` +
+          `Total expected: ${totalExpected} words\n` +
+          `Total in database: ${verifiedCount} words\n` +
+          `Newly seeded: ${seeded} words\n` +
+          `Already existed: ${skipped} words\n` +
+          `Errors: ${errors} words\n` +
+          `Processed: ${totalProcessed}/${prioritizedWords.length}\n\n` +
+          `Hardest verbs (151-230) seeded first, then harder (101-150), then easier (1-100), then adjectives.`;
+        
+        console.log(message);
+        alert(message);
+      } catch (error) {
+        console.error('Error seeding verbs:', error);
+        alert('Error seeding verbs: ' + error.message);
+      }
+    }
+
+    // Load common words practice session (loads from Firebase, no AI calls)
+    async function loadCommonVerbsPractice() {
+      try {
+        let wordsToUse = COMMON_WORDS;
+        if (!wordsToUse || wordsToUse.length === 0) {
+          if (typeof COMMON_VERBS !== 'undefined' && typeof COMMON_ADJECTIVES !== 'undefined') {
+            wordsToUse = [...COMMON_VERBS, ...COMMON_ADJECTIVES];
+          } else {
+            alert('Common words data not loaded. Please refresh the page.');
+            return;
+          }
+        }
+        
+        if (!wordsToUse || wordsToUse.length === 0) {
+          alert('Common words data not loaded. Please refresh the page.');
+          return;
+        }
+
+        switchScreen('reviewScreen');
+        document.getElementById('wordFront').textContent = 'Loading words...';
+        document.getElementById('contextDisplay').textContent = 'Loading from database...';
+
+        const seedUrl = `${firebaseConfig.databaseURL}/commonVerbs.json`;
+        const seedResponse = await fetch(seedUrl);
+        const seededWords = await seedResponse.json();
+
+        const totalExpected = (COMMON_VERBS ? COMMON_VERBS.length : 0) + (COMMON_ADJECTIVES ? COMMON_ADJECTIVES.length : 0);
+        const currentCount = seededWords ? Object.keys(seededWords).length : 0;
+        
+        if (!seededWords || currentCount < totalExpected) {
+          const shouldSeed = confirm(`Common words not fully seeded.\n\nExpected: ${totalExpected} words\nFound: ${currentCount} words\nMissing: ${totalExpected - currentCount} words\n\nWould you like to seed ALL remaining words now?\n\nThis will take 10-15 minutes and requires your OpenAI API key.`);
+          if (!shouldSeed) {
+            switchScreen('showListScreen');
+            return;
+          }
+          
+          switchScreen('reviewScreen');
+          document.getElementById('wordFront').textContent = 'Seeding ALL words...';
+          document.getElementById('contextDisplay').textContent = `Processing ${totalExpected} words. This will take 10-15 minutes. Please wait...`;
+          document.getElementById('progressFill').style.width = '0%';
+          
+          try {
+            await seedCommonVerbs();
+            await loadCommonVerbsPractice();
+            return;
+          } catch (error) {
+            console.error('Seeding error:', error);
+            alert('Error seeding words: ' + error.message + '\n\nPlease check your OpenAI API key and try again.');
+            switchScreen('showListScreen');
+            return;
+          }
+        }
+
+        const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
+        const response = await fetch(url);
+        const existingWords = await response.json();
+        
+        const masteredWordSet = existingWords ? new Set(
+          Object.values(existingWords)
+            .filter(w => w.mastered === true)
+            .map(w => w.word)
+        ) : new Set();
+        
+        const existingWordSet = existingWords ? new Set(Object.values(existingWords).map(w => w.word)) : new Set();
+
+        const allSeededWords = Object.values(seededWords);
+        const verbToRank = new Map();
+        COMMON_VERBS.forEach((v, idx) => verbToRank.set(v.word, idx + 1));
+        const adjectiveSet = new Set(COMMON_ADJECTIVES.map(a => a.word));
+        
+        const easierVerbs = [];
+        const harderVerbs = [];
+        const hardestVerbs = [];
+        const adjectives = [];
+        const unmatchedWords = [];
+        
+        allSeededWords.forEach(word => {
+          if (masteredWordSet.has(word.word)) return;
+          
+          const verbRank = verbToRank.get(word.word);
+          if (verbRank !== undefined) {
+            if (verbRank >= 151) {
+              hardestVerbs.push(word);
+            } else if (verbRank >= 101) {
+              harderVerbs.push(word);
+            } else {
+              easierVerbs.push(word);
+            }
+          } else if (adjectiveSet.has(word.word)) {
+            adjectives.push(word);
+          } else {
+            unmatchedWords.push(word);
+          }
+        });
+        
+        console.log(`Word selection: Total seeded: ${allSeededWords.length}, Hardest verbs (151-230): ${hardestVerbs.length}, Harder verbs (101-150): ${harderVerbs.length}, Easier verbs (1-100): ${easierVerbs.length}, Adjectives: ${adjectives.length}, Unmatched: ${unmatchedWords.length}, Mastered: ${masteredWordSet.size}`);
+        
+        const targetCount = 20;
+        let selectedWords = [];
+        
+        selectedWords.push(...hardestVerbs.sort(() => Math.random() - 0.5));
+        selectedWords.push(...harderVerbs.sort(() => Math.random() - 0.5));
+        
+        const stillRemaining = targetCount - selectedWords.length;
+        if (stillRemaining > 0 && easierVerbs.length > 0) {
+          const easierToAdd = Math.min(easierVerbs.length, stillRemaining);
+          selectedWords.push(...easierVerbs.sort(() => Math.random() - 0.5).slice(0, easierToAdd));
+        }
+        
+        const stillRemaining2 = targetCount - selectedWords.length;
+        if (stillRemaining2 > 0 && adjectives.length > 0) {
+          const adjToAdd = Math.min(adjectives.length, stillRemaining2);
+          selectedWords.push(...adjectives.sort(() => Math.random() - 0.5).slice(0, adjToAdd));
+        }
+        
+        const finalRemaining = targetCount - selectedWords.length;
+        if (finalRemaining > 0 && unmatchedWords.length > 0) {
+          const unmatchedToAdd = Math.min(unmatchedWords.length, finalRemaining);
+          selectedWords.push(...unmatchedWords.sort(() => Math.random() - 0.5).slice(0, unmatchedToAdd));
+        }
+        
+        if (selectedWords.length < targetCount) {
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
+          const alreadySelected = new Set(selectedWords.map(w => w.word));
+          const moreWords = allAvailable.filter(w => !alreadySelected.has(w.word));
+          selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, targetCount - selectedWords.length));
+        }
+        
+        const wordsToPractice = selectedWords.slice(0, targetCount);
+        console.log(`Selected ${wordsToPractice.length} words for practice`);
+
+        if (wordsToPractice.length === 0) {
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
+          if (allAvailable.length > 0) {
+            console.log(`Using all ${allAvailable.length} available seeded words as final fallback`);
+            const wordsToPracticeFallback = allAvailable.sort(() => Math.random() - 0.5).slice(0, 20);
+            
+            currentWords = [];
+            for (let i = 0; i < wordsToPracticeFallback.length; i++) {
+              const seededWord = wordsToPracticeFallback[i];
+              const wordId = seededWord.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+              
+              const existingWord = existingWords && existingWords[wordId];
+              
+              if (existingWord) {
+                let properReading = existingWord.reading;
+                const verbMatch = COMMON_VERBS.find(v => v.word === existingWord.word);
+                if (verbMatch) {
+                  properReading = verbMatch.reading;
+                } else {
+                  const adjMatch = COMMON_ADJECTIVES.find(a => a.word === existingWord.word);
+                  if (adjMatch) {
+                    properReading = adjMatch.reading;
+                  }
+                }
+                currentWords.push({ id: wordId, ...existingWord, reading: properReading });
+              } else {
+                let properReading = seededWord.reading;
+                const verbMatch = COMMON_VERBS.find(v => v.word === seededWord.word);
+                if (verbMatch) {
+                  properReading = verbMatch.reading;
+                } else {
+                  const adjMatch = COMMON_ADJECTIVES.find(a => a.word === seededWord.word);
+                  if (adjMatch) {
+                    properReading = adjMatch.reading;
+                  }
+                }
+                
+                const newWord = {
+                  id: wordId,
+                  word: seededWord.word,
+                  reading: properReading,
+                  meaning: seededWord.meaning,
+                  context: seededWord.context,
+                  contextTranslation: seededWord.contextTranslation,
+                  platform: 'common_words',
+                  show: 'Common Words',
+                  season: null,
+                  episode: null,
+                  savedAt: Date.now(),
+                  lastReviewed: null,
+                  nextReview: Date.now(),
+                  reviewCount: 0,
+                  difficulty: 'new',
+                  timesEncountered: 1,
+                  mastered: false
+                };
+                
+                try {
+                  await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newWord)
+                  });
+                } catch (error) {
+                  console.error('Error saving word to Firebase:', error);
+                }
+                
+                currentWords.push(newWord);
+              }
+              
+              const progress = ((i + 1) / wordsToPracticeFallback.length) * 100;
+              document.getElementById('progressFill').style.width = progress + '%';
+            }
+            
+            if (currentWords.length > 0) {
+              sessionStats = { hard: 0, good: 0, easy: 0, deleted: 0, total: 0 };
+              currentIndex = 0;
+              reviewedToday = 0;
+              document.getElementById('dueCount').textContent = currentWords.length;
+              document.getElementById('reviewedCount').textContent = 0;
+              showCurrentCard();
+              return;
+            }
+          }
+          
+          const errorMsg = `No words available for practice.\n\n` +
+            `Total seeded words: ${allSeededWords.length}\n` +
+            `Hardest verbs (151-230): ${hardestVerbs.length}\n` +
+            `Harder verbs (101-150): ${harderVerbs.length}\n` +
+            `Easier verbs (1-100): ${easierVerbs.length}\n` +
+            `Adjectives: ${adjectives.length}\n` +
+            `Unmatched: ${unmatchedWords.length}\n` +
+            `Mastered: ${masteredWordSet.size}\n` +
+            `Available (not mastered): ${allSeededWords.filter(w => !masteredWordSet.has(w.word)).length}\n\n` +
+            `If words aren't seeded, click "Practice Common" again to seed them.`;
+          alert(errorMsg);
+          switchScreen('showListScreen');
+          return;
+        }
+
+        currentWords = [];
+        for (let i = 0; i < wordsToPractice.length; i++) {
+          const seededWord = wordsToPractice[i];
+          const wordId = seededWord.word.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_').toLowerCase();
+          
+          const existingWord = existingWords && existingWords[wordId];
+          
+          if (existingWord) {
+            let properReading = existingWord.reading;
+            const verbMatch = COMMON_VERBS.find(v => v.word === existingWord.word);
+            if (verbMatch) {
+              properReading = verbMatch.reading;
+            } else {
+              const adjMatch = COMMON_ADJECTIVES.find(a => a.word === existingWord.word);
+              if (adjMatch) {
+                properReading = adjMatch.reading;
+              }
+            }
+            currentWords.push({
+              id: wordId,
+              ...existingWord,
+              reading: properReading
+            });
+          } else {
+            let properReading = seededWord.reading;
+            const verbMatch = COMMON_VERBS.find(v => v.word === seededWord.word);
+            if (verbMatch) {
+              properReading = verbMatch.reading;
+            } else {
+              const adjMatch = COMMON_ADJECTIVES.find(a => a.word === seededWord.word);
+              if (adjMatch) {
+                properReading = adjMatch.reading;
+              }
+            }
+            
+            const newWord = {
+              id: wordId,
+              word: seededWord.word,
+              reading: properReading,
+              meaning: seededWord.meaning,
+              context: seededWord.context,
+              contextTranslation: seededWord.contextTranslation,
+              platform: 'common_words',
+              show: 'Common Words',
+              season: null,
+              episode: null,
+              savedAt: Date.now(),
+              lastReviewed: null,
+              nextReview: Date.now(),
+              reviewCount: 0,
+              difficulty: 'new',
+              timesEncountered: 1,
+              mastered: false
+            };
+            
+            try {
+              await fetch(`${firebaseConfig.databaseURL}/users/${currentUserId}/words/${wordId}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newWord)
+              });
+            } catch (error) {
+              console.error('Error saving word to Firebase:', error);
+            }
+            
+            currentWords.push(newWord);
+          }
+          
+          const progress = ((i + 1) / wordsToPractice.length) * 100;
+          document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        if (currentWords.length === 0) {
+          alert('Failed to load words. Please try again.');
+          switchScreen('showListScreen');
+          return;
+        }
+
+        sessionStats = { hard: 0, good: 0, easy: 0, deleted: 0, total: 0 };
+        currentIndex = 0;
+        reviewedToday = 0;
+        document.getElementById('dueCount').textContent = currentWords.length;
+        document.getElementById('reviewedCount').textContent = 0;
+
+        showCurrentCard();
+      } catch (error) {
+        console.error('Error loading common words practice:', error);
+        alert('Error: ' + error.message);
+        switchScreen('showListScreen');
+      }
     }
 
     async function updateStats() {
