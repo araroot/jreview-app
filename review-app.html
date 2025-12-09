@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V46</h1>
+    <h1>📚 Japanese Review V47</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -1143,32 +1143,57 @@ Be concise and practical. Focus on common, everyday usage.`;
           const existingWord = existingWords && existingWords[wordId];
           
           if (existingWord) {
-            // Use existing word data
+            // Update reading if we have a better one from COMMON_VERBS/ADJECTIVES
+            let properReading = existingWord.reading;
+            const verbMatch = COMMON_VERBS.find(v => v.word === existingWord.word);
+            if (verbMatch) {
+              properReading = verbMatch.reading;
+            } else {
+              const adjMatch = COMMON_ADJECTIVES.find(a => a.word === existingWord.word);
+              if (adjMatch) {
+                properReading = adjMatch.reading;
+              }
+            }
+            
+            // Use existing word data but with updated reading
             currentWords.push({
               id: wordId,
-              ...existingWord
+              ...existingWord,
+              reading: properReading
             });
           } else {
-            // Create new word object from seeded data
-            const newWord = {
-              id: wordId,
-              word: seededWord.word,
-              reading: seededWord.reading,
-              meaning: seededWord.meaning,
-              context: seededWord.context,
-              contextTranslation: seededWord.contextTranslation,
-              platform: 'common_words',
-              show: 'Common Words',
-              season: null,
-              episode: null,
-              savedAt: Date.now(),
-              lastReviewed: null,
-              nextReview: Date.now(),
-              reviewCount: 0,
-              difficulty: 'new',
-              timesEncountered: 1,
-              mastered: false
-            };
+              // Get proper reading from COMMON_VERBS or COMMON_ADJECTIVES if available
+              let properReading = seededWord.reading;
+              const verbMatch = COMMON_VERBS.find(v => v.word === seededWord.word);
+              if (verbMatch) {
+                properReading = verbMatch.reading;
+              } else {
+                const adjMatch = COMMON_ADJECTIVES.find(a => a.word === seededWord.word);
+                if (adjMatch) {
+                  properReading = adjMatch.reading;
+                }
+              }
+              
+              // Create new word object from seeded data
+              const newWord = {
+                id: wordId,
+                word: seededWord.word,
+                reading: properReading, // Use proper hiragana reading
+                meaning: seededWord.meaning,
+                context: seededWord.context,
+                contextTranslation: seededWord.contextTranslation,
+                platform: 'common_words',
+                show: 'Common Words',
+                season: null,
+                episode: null,
+                savedAt: Date.now(),
+                lastReviewed: null,
+                nextReview: Date.now(),
+                reviewCount: 0,
+                difficulty: 'new',
+                timesEncountered: 1,
+                mastered: false
+              };
             
             // Save to user's words in Firebase
             try {
