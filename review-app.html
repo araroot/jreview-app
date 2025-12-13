@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>📚 Japanese Review V47</h1>
+    <h1>📚 Japanese Review V48</h1>
     <div class="stats">
       <div class="stat-item"><div class="stat-number" id="dueCount">0</div><div>Due Today</div></div>
       <div class="stat-item"><div class="stat-number" id="reviewedCount">0</div><div>Reviewed</div></div>
@@ -122,6 +122,7 @@
             <div class="context" id="contextDisplay"></div>
           </div>
           <div class="card-back">
+            <button class="delete-btn" id="deleteBtnBack" title="Delete this word">🗑️</button>
             <div class="answer">
               <div class="word-display" id="wordDisplay"></div>
               <div class="reading-display" id="readingDisplay"></div>
@@ -278,11 +279,27 @@
       await loadSmartPractice(selectedShow.name, selectedShow.season, selectedShow.episode, 50);
     });
 
+    // Helper function to get deleted words set
+    async function getDeletedWordsSet() {
+      try {
+        const deletedUrl = `${firebaseConfig.databaseURL}/users/${currentUserId}/deletedWords.json`;
+        const deletedResponse = await fetch(deletedUrl);
+        const deletedData = await deletedResponse.json();
+        return deletedData ? new Set(Object.values(deletedData).map(w => w.word)) : new Set();
+      } catch (error) {
+        console.error('Error loading deleted words:', error);
+        return new Set();
+      }
+    }
+
     async function loadShowList() {
       try {
         const url = `${firebaseConfig.databaseURL}/users/${currentUserId}/words.json`;
         const response = await fetch(url);
         const words = await response.json();
+        
+        // Get deleted words to filter them out
+        const deletedWordSet = await getDeletedWordsSet();
 
         if (!words) {
           document.getElementById('showList').innerHTML = '<p style="color: white; text-align: center; padding: 20px;">No words saved yet!</p>';
@@ -290,7 +307,7 @@
           return;
         }
 
-        const allWords = Object.values(words);
+        const allWords = Object.values(words).filter(word => !deletedWordSet.has(word.word));
         const now = Date.now();
         const dueCount = allWords.filter(word => !word.mastered && word.nextReview <= now).length;
         document.getElementById('allShowsDueCount').textContent = dueCount;
@@ -440,7 +457,12 @@
 
         if (!allWords) { alert("No words saved yet!"); switchScreen('showListScreen'); return; }
 
-        const allWordsArray = Object.entries(allWords).map(([id, word]) => ({ id, ...word }));
+        // Get deleted words to filter them out
+        const deletedWordSet = await getDeletedWordsSet();
+
+        const allWordsArray = Object.entries(allWords)
+          .map(([id, word]) => ({ id, ...word }))
+          .filter(word => !deletedWordSet.has(word.word)); // Filter deleted words
         
         // Filter for this show
         const showWords = allWordsArray.filter(word =>
@@ -506,10 +528,13 @@
 
         if (!words) { switchScreen('completionScreen'); document.querySelector('.completion-message').textContent = "No words saved yet."; return; }
 
+        // Get deleted words to filter them out
+        const deletedWordSet = await getDeletedWordsSet();
+
         const now = Date.now();
         currentWords = Object.entries(words)
           .map(([id, word]) => ({ id, ...word }))
-          .filter(word => !word.mastered && word.nextReview <= now)
+          .filter(word => !deletedWordSet.has(word.word) && !word.mastered && word.nextReview <= now)
           .sort((a, b) => a.nextReview - b.nextReview)
           .slice(0, 15);
 
@@ -575,11 +600,12 @@
     }
 
     document.getElementById('flashcard').addEventListener('click', function(e) {
-      if (e.target.classList.contains('delete-btn')) return;
+      if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) return;
       if (!isFlipped) { this.classList.add('flipped'); isFlipped = true; }
     });
 
     document.getElementById('deleteBtnFront').addEventListener('click', (e) => { e.stopPropagation(); deleteCurrentWord(); });
+    document.getElementById('deleteBtnBack').addEventListener('click', (e) => { e.stopPropagation(); deleteCurrentWord(); });
 
     async function deleteCurrentWord() {
       const word = currentWords[currentIndex];
@@ -959,6 +985,9 @@ Be concise and practical. Focus on common, everyday usage.`;
         const response = await fetch(url);
         const existingWords = await response.json();
         
+        // Get deleted words to filter them out
+        const deletedWordSet = await getDeletedWordsSet();
+        
         // Only filter out words that are mastered, not all learned words
         const masteredWordSet = existingWords ? new Set(
           Object.values(existingWords)
@@ -987,8 +1016,8 @@ Be concise and practical. Focus on common, everyday usage.`;
         const unmatchedWords = [];   // Words not in either list
         
         allSeededWords.forEach(word => {
-          // Only skip if mastered
-          if (masteredWordSet.has(word.word)) return;
+          // Skip if mastered or deleted
+          if (masteredWordSet.has(word.word) || deletedWordSet.has(word.word)) return;
           
           const verbRank = verbToRank.get(word.word);
           if (verbRank !== undefined) {
@@ -1043,7 +1072,7 @@ Be concise and practical. Focus on common, everyday usage.`;
         
         // Final fallback: Use any available words
         if (selectedWords.length < targetCount) {
-          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word) && !deletedWordSet.has(w.word));
           const alreadySelected = new Set(selectedWords.map(w => w.word));
           const moreWords = allAvailable.filter(w => !alreadySelected.has(w.word));
           selectedWords.push(...moreWords.sort(() => Math.random() - 0.5).slice(0, targetCount - selectedWords.length));
@@ -1054,8 +1083,8 @@ Be concise and practical. Focus on common, everyday usage.`;
         console.log(`Selected ${wordsToPractice.length} words for practice`);
 
         if (wordsToPractice.length === 0) {
-          // Final fallback: use ALL seeded words that aren't mastered
-          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word));
+          // Final fallback: use ALL seeded words that aren't mastered or deleted
+          const allAvailable = allSeededWords.filter(w => !masteredWordSet.has(w.word) && !deletedWordSet.has(w.word));
           if (allAvailable.length > 0) {
             console.log(`Using all ${allAvailable.length} available seeded words as final fallback`);
             const wordsToPracticeFallback = allAvailable.sort(() => Math.random() - 0.5).slice(0, 20);
@@ -1126,7 +1155,7 @@ Be concise and practical. Focus on common, everyday usage.`;
             `Adjectives: ${adjectives.length}\n` +
             `Unmatched: ${unmatchedWords.length}\n` +
             `Mastered: ${masteredWordSet.size}\n` +
-            `Available (not mastered): ${allSeededWords.filter(w => !masteredWordSet.has(w.word)).length}\n\n` +
+            `Available (not mastered/deleted): ${allSeededWords.filter(w => !masteredWordSet.has(w.word) && !deletedWordSet.has(w.word)).length}\n\n` +
             `If words aren't seeded, click "Practice Common" again to seed them.`;
           alert(errorMsg);
           switchScreen('showListScreen');
