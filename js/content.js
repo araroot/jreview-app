@@ -158,7 +158,7 @@ function processSubtitles() {
 let currentTranslation = '';
 
 // Display insights in the panel
-function displayInsights(subtitle, insights) {
+async function displayInsights(subtitle, insights) {
   const insightPanel = document.getElementById('language-insights');
   if (!insightPanel) {
     initializeUI();
