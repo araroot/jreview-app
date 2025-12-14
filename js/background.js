@@ -300,9 +300,8 @@ async function processWithAI(subtitle, tabId, platform = 'streaming') {
     }
     lastRequestTime = Date.now();
 
-    // Get deleted words list
-    const deletedWords = await fetchDeletedWords();
-    const promptContent = getPromptTemplate(subtitle, platform, deletedWords);
+    // Skip deleted words check for speed - prioritize real-time sync
+    const promptContent = getPromptTemplate(subtitle, platform, []);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',

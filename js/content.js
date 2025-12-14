@@ -2,59 +2,6 @@ console.log('Streaming Language Assistant: Content script loading...');
 
 let lastProcessedSubtitle = '';
 let currentPlatform = '';
-let deletedWordsCache = new Set();
-let lastDeletedWordsFetch = 0;
-const DELETED_WORDS_CACHE_TIME = 5 * 60 * 1000; // 5 minutes
-
-// Firebase Configuration (same as background.js)
-const FIREBASE_CONFIG = {
-  databaseURL: "https://japanese-learning-app-dc19d-default-rtdb.firebaseio.com"
-};
-
-// Fetch deleted words from Firebase (with caching)
-async function fetchDeletedWords() {
-  const now = Date.now();
-
-  // Return cached if still fresh
-  if (deletedWordsCache.size > 0 && (now - lastDeletedWordsFetch) < DELETED_WORDS_CACHE_TIME) {
-    return deletedWordsCache;
-  }
-
-  try {
-    // Get user ID from storage
-    const result = await chrome.storage.local.get('anonymousUserId');
-    const userId = result.anonymousUserId;
-
-    if (!userId) {
-      return new Set();
-    }
-
-    const url = `${FIREBASE_CONFIG.databaseURL}/users/${userId}/deletedWords.json`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      return new Set();
-    }
-
-    const deletedWords = await response.json();
-
-    if (!deletedWords) {
-      deletedWordsCache = new Set();
-      lastDeletedWordsFetch = now;
-      return new Set();
-    }
-
-    // Extract just the word text
-    deletedWordsCache = new Set(Object.values(deletedWords).map(w => w.word));
-    lastDeletedWordsFetch = now;
-
-    console.log('📝 Loaded deleted words list:', deletedWordsCache.size, 'words');
-    return deletedWordsCache;
-  } catch (error) {
-    console.error('Error fetching deleted words:', error);
-    return new Set();
-  }
-}
 
 // Detect which platform we're on
 function detectPlatform() {
@@ -144,9 +91,7 @@ function processSubtitles() {
 
   lastProcessedSubtitle = currentSubtitle;
 
-  console.log('📝 Subtitle detected:', cleanedText);
-
-  // Send cleaned subtitle to background script
+  // Send cleaned subtitle to background script (no logging for speed)
   chrome.runtime.sendMessage({
     type: 'PROCESS_SUBTITLE',
     subtitle: cleanedText,
@@ -157,8 +102,8 @@ function processSubtitles() {
 // Store current translation globally so save buttons can access it
 let currentTranslation = '';
 
-// Display insights in the panel
-async function displayInsights(subtitle, insights) {
+// Display insights in the panel (synchronous for maximum speed)
+function displayInsights(subtitle, insights) {
   const insightPanel = document.getElementById('language-insights');
   if (!insightPanel) {
     initializeUI();
@@ -166,14 +111,10 @@ async function displayInsights(subtitle, insights) {
   }
 
   try {
-    console.log('📥 Raw insights received:', insights);
     const parsedInsights = JSON.parse(insights);
-    console.log('📦 Parsed insights:', parsedInsights);
     const words = parsedInsights.words || [];
     const translation = parsedInsights.translation || '';
     currentTranslation = translation;
-
-    console.log('📊 Final data:', { wordsCount: words.length, hasTranslation: !!translation, words });
 
     // If no words found, hide panel (translation is captured but we only show words)
     if (words.length === 0) {
@@ -185,29 +126,18 @@ async function displayInsights(subtitle, insights) {
       <div class="platform-indicator">${currentPlatform.toUpperCase()}</div>
     `;
 
-    // Translation is captured but not displayed in popup
-    // It's only used when saving words to Firebase
-
     // Filter out words without kanji (likely basic hiragana words)
     const hasKanji = (text) => /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
     const wordsWithKanji = words.filter(word => hasKanji(word.word));
 
-    console.log(`Filtered: ${words.length} words → ${wordsWithKanji.length} words with kanji`);
-
-    // Get deleted words and filter them out
-    const deletedWordSet = await fetchDeletedWords();
-    const wordsToDisplay = wordsWithKanji.filter(word => !deletedWordSet.has(word.word));
-
-    console.log(`After deleting filtered words: ${wordsWithKanji.length} → ${wordsToDisplay.length} words to display`);
-
-    // If no words to display, hide panel
-    if (wordsToDisplay.length === 0) {
+    // If no words with kanji, hide panel
+    if (wordsWithKanji.length === 0) {
       insightPanel.style.display = 'none';
       return;
     }
 
     // Add word explanations (with auto-saved indicator)
-    wordsToDisplay.forEach((word, index) => {
+    wordsWithKanji.forEach((word, index) => {
       const wordId = `word-${index}`;
       html += `
         <div class="word-item" data-word-id="${wordId}">
@@ -225,8 +155,8 @@ async function displayInsights(subtitle, insights) {
     insightPanel.innerHTML = html;
     insightPanel.style.display = 'block';
 
-    // Auto-save all words that are displayed (already filtered for deleted words)
-    wordsToDisplay.forEach(word => {
+    // Auto-save all words with kanji (non-blocking)
+    wordsWithKanji.forEach(word => {
       autoSaveWord(word, subtitle);
     });
   } catch (error) {
