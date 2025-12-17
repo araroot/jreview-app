@@ -387,6 +387,86 @@ function normalizeJapanese(s) {
     .trim();
 }
 
+function normalizeForSentenceId(s) {
+  // Aggressive normalization for dedupe/id (strip whitespace + common punctuation)
+  return normalizeJapanese(s)
+    .replace(/[、。！？!?…「」『』（）()【】［］\[\]{}]/g, '')
+    .trim();
+}
+
+function stripForLengthHeuristic(s) {
+  // Remove punctuation/symbols; keep kana+kanji for length checks
+  return normalizeForSentenceId(s).replace(/[ー〜]/g, '');
+}
+
+function containsUsefulMarker(s) {
+  // Basic markers that usually indicate a meaningful clause even if short
+  return /(?:は|が|を|に|で|と|へ|も|から|まで|より|って|じゃ|では)/.test(s);
+}
+
+function looksLikeConjugatedOrQuestion(s) {
+  // Heuristic endings that often make short lines still useful
+  return /(?:て|た|ない|なかった|ます|ました|ません|んだ|の|か|よ|ね|な|ぞ|さ)[。！？!?…]*$/.test(s);
+}
+
+function isLowValueFragment(text) {
+  // Extremely short reactions/interjections (often mined as junk)
+  const t = stripForLengthHeuristic(text);
+  if (t.length >= 10) return false;
+
+  // Common tiny reactions (incl. kanji ones like 本当？/嘘？)
+  if (/^(?:え|えっ|えー|ん|うん|ううん|はい|いいえ|へえ|ほう|あっ|おっ|まじ|マジ|本当|嘘|ええ|そう|なるほど|了解|分かった|わかった)[。！？!?…]*$/.test(text.trim())) {
+    return true;
+  }
+
+  // If still very short and lacks markers, treat as low value
+  if (t.length < 8 && !containsUsefulMarker(text) && !looksLikeConjugatedOrQuestion(text)) {
+    return true;
+  }
+
+  return false;
+}
+
+function mergeIfFragmentary(before, cur, after) {
+  // Merge short/sub-clause lines with neighbors to form a fuller sentence
+  const curText = (cur?.subtitle || '').trim();
+  if (!curText) return { text: curText, startOffset: 0, endOffset: 0 };
+
+  let text = curText;
+  let startOffset = 0;
+  let endOffset = 0;
+
+  const curLen = stripForLengthHeuristic(text).length;
+  const endsOpen = /[、…]$/.test(text) || (!/[。！？!?]$/.test(text) && curLen < 14);
+
+  // Prefer joining with after if current ends open/short and close in time
+  if (after && endsOpen && typeof after.ts === 'number' && typeof cur.ts === 'number' && (after.ts - cur.ts) <= 4000) {
+    const afterText = (after.subtitle || '').trim();
+    if (afterText) {
+      const merged = `${text}${afterText.startsWith('…') ? '' : ''}${afterText}`;
+      if (stripForLengthHeuristic(merged).length <= 90) {
+        text = merged;
+        endOffset = 1;
+      }
+    }
+  }
+
+  // If still too short, consider joining with before when it ends open and close in time
+  const postLen = stripForLengthHeuristic(text).length;
+  if (before && postLen < 12 && typeof before.ts === 'number' && typeof cur.ts === 'number' && (cur.ts - before.ts) <= 4000) {
+    const beforeText = (before.subtitle || '').trim();
+    if (beforeText && /[、…]$/.test(beforeText)) {
+      const merged = `${beforeText}${text}`;
+      if (stripForLengthHeuristic(merged).length <= 90) {
+        text = merged;
+        startOffset = -1;
+      }
+    }
+  }
+
+  return { text, startOffset, endOffset };
+}
+
 function hashString(str) {
   // DJB2-ish, stable and fast
   let h = 5381;
@@ -431,17 +511,29 @@ async function maybeUpdateSentenceMiningQueue(tabId) {
     const cur = events[i];
     const before = events[i - 1];
     const after = events[i + 1];
-    const text = cur.subtitle;
-    const norm = normalizeJapanese(text);
+    const merged = mergeIfFragmentary(before, cur, after);
+    const text = merged.text;
+    const norm = normalizeForSentenceId(text);
     if (!norm) continue;
-    // Skip very short fragments
-    if (norm.length < 6) continue;
+
+    // Drop obvious junk fragments (these are what you're currently skipping)
+    if (isLowValueFragment(text)) continue;
+
+    // Ensure candidate has enough substance after normalization
+    const lenScore = stripForLengthHeuristic(text).length;
+    if (lenScore < 10 && !containsUsefulMarker(text) && !looksLikeConjugatedOrQuestion(text)) continue;
+
     const id = hashString(norm);
+
+    // Adjust context based on merges
+    const beforeCtx = events[i + merged.startOffset - 1];
+    const afterCtx = events[i + merged.endOffset + 1];
+
     candidates.push({
       id,
       text,
-      before: before ? before.subtitle : '',
-      after: after ? after.subtitle : '',
+      before: beforeCtx ? beforeCtx.subtitle : '',
+      after: afterCtx ? afterCtx.subtitle : '',
       firstSeenAt: cur.ts,
       platform: cur.platform,
       show: cur.show
@@ -510,7 +602,6 @@ async function syncSentenceCandidatesToFirebase(mergedQueue, now) {
         firstSeenAt: c.firstSeenAt || now,
         lastSeenAt: c.lastSeenAt || now,
         occurrences: c.occurrences || 1,
-        status: c.status || 'new',
       };
     }
 

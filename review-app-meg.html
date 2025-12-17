@@ -446,6 +446,7 @@
     async function loadCandidates() {
       const candidatesObj = await fbGet(`/users/${currentUserId}/sentenceCandidates`) || {};
       const candidates = Object.values(candidatesObj)
+        .filter(c => (c.status || 'new') === 'new')
         .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
         .slice(0, 80);
 
