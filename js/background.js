@@ -377,6 +377,8 @@ let lastMiningRunAt = 0;
 const MINING_THROTTLE_MS = 30_000;
 const MAX_EVENTS_PER_TAB = 400;
 const MAX_MINING_QUEUE = 600;
+let lastSentenceCandidatesSyncAt = 0;
+const MAX_CANDIDATES_SYNC_PER_RUN = 40;
 
 function normalizeJapanese(s) {
   return (s || '')
@@ -479,4 +481,52 @@ async function maybeUpdateSentenceMiningQueue(tabId) {
     .slice(0, MAX_MINING_QUEUE);
 
   await chrome.storage.local.set({ sentenceMiningQueue: merged });
+
+  // Sync newest candidates to Firebase for mobile review app (throttled; never blocks overlay)
+  void syncSentenceCandidatesToFirebase(merged, now);
+}
+
+async function syncSentenceCandidatesToFirebase(mergedQueue, now) {
+  try {
+    if (!firebaseInitialized || !currentUserId) return;
+    if (!Array.isArray(mergedQueue) || mergedQueue.length === 0) return;
+
+    // Only sync items seen since last sync; cap to keep this lightweight
+    const toSync = mergedQueue
+      .filter(c => (c.lastSeenAt || 0) > lastSentenceCandidatesSyncAt)
+      .slice(0, MAX_CANDIDATES_SYNC_PER_RUN);
+
+    if (toSync.length === 0) return;
+
+    const payload = {};
+    for (const c of toSync) {
+      payload[c.id] = {
+        id: c.id,
+        text: c.text,
+        before: c.before || '',
+        after: c.after || '',
+        show: c.show || null,
+        platform: c.platform || 'unknown',
+        firstSeenAt: c.firstSeenAt || now,
+        lastSeenAt: c.lastSeenAt || now,
+        occurrences: c.occurrences || 1,
+        status: c.status || 'new',
+      };
+    }
+
+    // Write to current user and shared users. Use PATCH to batch.
+    const userIds = [currentUserId, ...SHARED_USER_IDS];
+    await Promise.all(userIds.map(async (uid) => {
+      const url = `${FIREBASE_CONFIG.databaseURL}/users/${uid}/sentenceCandidates.json`;
+      await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }));
+
+    lastSentenceCandidatesSyncAt = now;
+  } catch (e) {
+    // Best effort only—never impact overlay responsiveness
+  }
 }
