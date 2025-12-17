@@ -2,6 +2,8 @@ console.log('Streaming Language Assistant: Content script loading...');
 
 let lastProcessedSubtitle = '';
 let currentPlatform = '';
+let lastSentSubtitle = '';
+let lastRequestId = 0;
 
 // Detect which platform we're on
 function detectPlatform() {
@@ -92,15 +94,26 @@ function processSubtitles() {
   lastProcessedSubtitle = currentSubtitle;
 
   // Send cleaned subtitle to background script (no logging for speed)
+  lastRequestId += 1;
+  lastSentSubtitle = cleanedText;
   chrome.runtime.sendMessage({
     type: 'PROCESS_SUBTITLE',
     subtitle: cleanedText,
-    platform: currentPlatform
+    platform: currentPlatform,
+    requestId: lastRequestId,
+    ts: Date.now()
   });
-}
 
-// Store current translation globally so save buttons can access it
-let currentTranslation = '';
+  // Show a lightweight "loading" state immediately to stay in sync
+  const insightPanel = document.getElementById('language-insights');
+  if (insightPanel) {
+    insightPanel.innerHTML = `
+      <div class="platform-indicator">${currentPlatform.toUpperCase()}</div>
+      <div style="opacity: 0.85; padding: 6px 0;">…</div>
+    `;
+    insightPanel.style.display = 'block';
+  }
+}
 
 // Display insights in the panel (synchronous for maximum speed)
 function displayInsights(subtitle, insights) {
@@ -113,10 +126,8 @@ function displayInsights(subtitle, insights) {
   try {
     const parsedInsights = JSON.parse(insights);
     const words = parsedInsights.words || [];
-    const translation = parsedInsights.translation || '';
-    currentTranslation = translation;
 
-    // If no words found, hide panel (translation is captured but we only show words)
+    // If no words found, hide panel
     if (words.length === 0) {
       insightPanel.style.display = 'none';
       return;
@@ -126,24 +137,14 @@ function displayInsights(subtitle, insights) {
       <div class="platform-indicator">${currentPlatform.toUpperCase()}</div>
     `;
 
-    // Filter out words without kanji (likely basic hiragana words)
-    const hasKanji = (text) => /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
-    const wordsWithKanji = words.filter(word => hasKanji(word.word));
-
-    // If no words with kanji, hide panel
-    if (wordsWithKanji.length === 0) {
-      insightPanel.style.display = 'none';
-      return;
-    }
-
-    // Add word explanations (with auto-saved indicator)
-    wordsWithKanji.forEach((word, index) => {
+    // Background chooses "difficult" words; show them as-is (kana-only difficult words included)
+    // Add word explanations (words-only overlay; sentence mining happens in background)
+    words.forEach((word, index) => {
       const wordId = `word-${index}`;
       html += `
         <div class="word-item" data-word-id="${wordId}">
           <div class="word-header">
             <div class="word">${word.word}</div>
-            <div class="auto-saved">✓</div>
           </div>
           ${word.romanization ? `<div class="reading">${word.romanization}</div>` : ''}
           ${word.reading ? `<div class="reading">${word.reading}</div>` : ''}
@@ -154,11 +155,6 @@ function displayInsights(subtitle, insights) {
 
     insightPanel.innerHTML = html;
     insightPanel.style.display = 'block';
-
-    // Auto-save all words with kanji (non-blocking)
-    wordsWithKanji.forEach(word => {
-      autoSaveWord(word, subtitle);
-    });
   } catch (error) {
     console.error('Error displaying insights:', error);
     if (insightPanel) insightPanel.style.display = 'none';
@@ -168,7 +164,10 @@ function displayInsights(subtitle, insights) {
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'AI_RESPONSE') {
-    displayInsights(lastProcessedSubtitle, message.data);
+    // Ignore stale responses so the overlay stays synced to the latest subtitle
+    if (typeof message.requestId === 'number' && message.requestId !== lastRequestId) return;
+    if (typeof message.subtitle === 'string' && message.subtitle !== lastSentSubtitle) return;
+    displayInsights(message.subtitle || lastSentSubtitle, message.data);
   }
 });
 
@@ -221,23 +220,3 @@ window.addEventListener('load', () => {
   }, 3000);
 });
 
-// Auto-save word to Firebase
-function autoSaveWord(word, subtitle) {
-  chrome.runtime.sendMessage({
-    type: 'SAVE_WORD',
-    wordData: {
-      word: word.word,
-      reading: word.reading || word.romanization || '',
-      meaning: word.meaning,
-      context: subtitle,
-      contextTranslation: currentTranslation,
-      platform: currentPlatform
-    }
-  }, (response) => {
-    if (response && response.success) {
-      console.log('✓ Auto-saved:', word.word);
-    } else {
-      console.error('Failed to auto-save:', word.word);
-    }
-  });
-}

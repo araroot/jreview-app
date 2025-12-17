@@ -1,6 +1,10 @@
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 100; // Reduced for maximum speed
 
+// Overlay sync: per-tab request tracking + abort control
+const latestRequestIdByTab = new Map();
+const abortControllerByTab = new Map();
+
 // Firebase Configuration - Add your credentials here
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDQgZ4XKuEbQ6mincj6R8bX6gBH_CUETUY",
@@ -14,23 +18,16 @@ const FIREBASE_CONFIG = {
 
 let firebaseInitialized = false;
 let currentUserId = null;
-let deletedWordsCache = [];
-let lastDeletedWordsFetch = 0;
-const DELETED_WORDS_CACHE_TIME = 5 * 60 * 1000; // 5 minutes
 
 // Shared users - words will be saved to all these User IDs
 // Each person tracks their own progress, but sees the same words
 const SHARED_USER_IDS = ['meg_shared']; // Add Meg's User ID here
 
-function getPromptTemplate(subtitle, platform = 'streaming', userDeletedWords = []) {
-  let deletedWordsSection = '';
-  if (userDeletedWords.length > 0) {
-    deletedWordsSection = `\n✗ SKIP these words the user marked as not useful: ${userDeletedWords.join(', ')}`;
-  }
-
+function getPromptTemplate(subtitle, platform = 'streaming') {
+  // Optimized for speed: return a small list of difficult words only (no translation)
   return `Analyze this Japanese subtitle from ${platform}: "${subtitle}"
 
-You are helping an N2 level learner. Extract vocabulary and expressions that would be useful for learning:
+You are helping an N2 level learner. Extract ONLY a small set of DIFFICULT words/expressions worth learning.
 
 INCLUDE (be generous):
 ✓ Any word/expression above N3 level (N2, N1, or beyond JLPT)
@@ -45,13 +42,15 @@ INCLUDE (be generous):
 SKIP (be strict here):
 ✗ Only these VERY basic words: です, ます, する, いる, ある, 行く, 来る, 見る, 食べる, 飲む, 今日, 明日, 時間, 人, 何, これ, それ, あれ
 ✗ Particles alone: は, が, を, に, で, と
-✗ Basic adjectives: 良い, 悪い, 大きい, 小さい${deletedWordsSection}
+✗ Basic adjectives: 良い, 悪い, 大きい, 小さい
 
-Be VERY INCLUSIVE - extract as many useful words as possible (aim for 40-50 words if available). Include variations and related terms. Better to show more words than miss useful vocabulary
+OUTPUT REQUIREMENTS:
+- Return AT MOST 8 items.
+- Prefer harder, higher-value words over common/easy ones.
+- If nothing suitable, return an empty words list.
 
-Format as JSON:
+Return ONLY JSON in this exact format:
 {
-  "translation": "English translation of the full sentence",
   "words": [
     {
       "word": "しょうがない",
@@ -60,15 +59,22 @@ Format as JSON:
     }
   ]
 }
-
-IMPORTANT: Always include "translation" with the English translation of the full subtitle.
-If there are NO suitable expressions, return: {"translation": "...", "words":[]}
-Return ONLY the JSON, no other text.`;
+Return ONLY JSON, no other text.`;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PROCESS_SUBTITLE') {
-    processWithAI(message.subtitle, sender.tab.id, message.platform);
+    const tabId = sender?.tab?.id;
+    if (typeof tabId === 'number') {
+      // Sentence-mining capture runs in the background and is throttled
+      void recordSubtitleEvent({
+        tabId,
+        subtitle: message.subtitle,
+        platform: message.platform,
+        ts: message.ts,
+      });
+      processWithAI(message.subtitle, tabId, message.platform, message.requestId);
+    }
   } else if (message.type === 'SAVE_WORD') {
     console.log('💾 Received SAVE_WORD request:', message.wordData.word);
     // Handle word saving
@@ -82,45 +88,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
   }
 });
-
-// Fetch deleted words from Firebase (with caching)
-async function fetchDeletedWords() {
-  const now = Date.now();
-
-  // Return cached if still fresh
-  if (deletedWordsCache.length > 0 && (now - lastDeletedWordsFetch) < DELETED_WORDS_CACHE_TIME) {
-    return deletedWordsCache;
-  }
-
-  try {
-    if (!currentUserId) return [];
-
-    const url = `${FIREBASE_CONFIG.databaseURL}/users/${currentUserId}/deletedWords.json`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const deletedWords = await response.json();
-
-    if (!deletedWords) {
-      deletedWordsCache = [];
-      lastDeletedWordsFetch = now;
-      return [];
-    }
-
-    // Extract just the word text
-    deletedWordsCache = Object.values(deletedWords).map(w => w.word);
-    lastDeletedWordsFetch = now;
-
-    console.log('📝 Loaded deleted words list:', deletedWordsCache.length, 'words');
-    return deletedWordsCache;
-  } catch (error) {
-    console.error('Error fetching deleted words:', error);
-    return [];
-  }
-}
 
 // Initialize vocabulary manager and Firebase
 async function initializeVocabularyManager() {
@@ -138,9 +105,6 @@ async function initializeVocabularyManager() {
 
   firebaseInitialized = true;
   console.log('✅ Extension ready! Firebase sync enabled.');
-
-  // Load deleted words on startup
-  await fetchDeletedWords();
 }
 
 // Handle saving a word
@@ -289,8 +253,19 @@ function randomSample(array, sampleSize) {
   return shuffled.slice(0, sampleSize);
 }
 
-async function processWithAI(subtitle, tabId, platform = 'streaming') {
+async function processWithAI(subtitle, tabId, platform = 'streaming', requestId) {
   try {
+    // Track latest request per tab (used to drop stale responses)
+    if (typeof tabId === 'number' && typeof requestId === 'number') {
+      latestRequestIdByTab.set(tabId, requestId);
+    }
+
+    // Abort any in-flight request for this tab so we stay synced
+    const prev = abortControllerByTab.get(tabId);
+    if (prev) prev.abort();
+    const controller = new AbortController();
+    abortControllerByTab.set(tabId, controller);
+
     const { CONFIG } = await chrome.storage.local.get('CONFIG');
 
     const now = Date.now();
@@ -300,8 +275,18 @@ async function processWithAI(subtitle, tabId, platform = 'streaming') {
     }
     lastRequestTime = Date.now();
 
-    // Skip deleted words check for speed - prioritize real-time sync
-    const promptContent = getPromptTemplate(subtitle, platform, []);
+    const promptContent = getPromptTemplate(subtitle, platform);
+
+    if (!CONFIG || !CONFIG.OPENAI_API_KEY) {
+      // No API key configured: keep overlay responsive
+      chrome.tabs.sendMessage(tabId, {
+        type: 'AI_RESPONSE',
+        subtitle,
+        requestId,
+        data: JSON.stringify({ words: [] })
+      });
+      return;
+    }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -309,14 +294,15 @@ async function processWithAI(subtitle, tabId, platform = 'streaming') {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${CONFIG.OPENAI_API_KEY}`
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [{
           role: "user",
           content: promptContent
         }],
-        temperature: 0.7,  // Add randomness to AI responses
-        max_tokens: 2000  // Increased to handle more words
+        temperature: 0.2,
+        max_tokens: 450
       })
     });
 
@@ -327,28 +313,30 @@ async function processWithAI(subtitle, tabId, platform = 'streaming') {
 
     const data = await response.json();
 
-    const aiResponse = data.choices[0].message.content.trim();
-    console.log('🤖 AI Response for subtitle:', subtitle);
-    console.log('Response:', aiResponse);
+    let aiResponse = data.choices[0].message.content.trim();
 
     try {
+      // Clean JSON response if wrapped in code fences
+      if (aiResponse.startsWith('```json')) {
+        aiResponse = aiResponse.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+      } else if (aiResponse.startsWith('```')) {
+        aiResponse = aiResponse.replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+      }
+
       const parsed = JSON.parse(aiResponse);
       if (!parsed.words) throw new Error('Invalid response format');
-      console.log('✅ Parsed:', parsed.words.length, 'words found');
 
-      // Randomly sample 20 words from the response for variety
-      const sampledWords = randomSample(parsed.words, 20);
-      console.log('🎲 Randomly selected:', sampledWords.length, 'words from', parsed.words.length);
+      // Drop stale responses (user has moved on to a newer subtitle)
+      if (typeof requestId === 'number' && latestRequestIdByTab.get(tabId) !== requestId) {
+        return;
+      }
 
-      // Create new response with sampled words
-      const sampledResponse = {
-        translation: parsed.translation,
-        words: sampledWords
-      };
-
+      const words = Array.isArray(parsed.words) ? parsed.words.slice(0, 8) : [];
       chrome.tabs.sendMessage(tabId, {
         type: 'AI_RESPONSE',
-        data: JSON.stringify(sampledResponse)
+        subtitle,
+        requestId,
+        data: JSON.stringify({ words })
       });
     } catch (e) {
       console.error('JSON parsing error:', e);
@@ -356,12 +344,139 @@ async function processWithAI(subtitle, tabId, platform = 'streaming') {
     }
 
   } catch (error) {
+    // Abort is expected when a newer subtitle arrives
+    if (error && (error.name === 'AbortError' || String(error.message || '').includes('aborted'))) {
+      return;
+    }
     console.error('Processing error:', error);
     chrome.tabs.sendMessage(tabId, {
       type: 'AI_RESPONSE',
+      subtitle,
+      requestId,
       data: JSON.stringify({
         words: []
       })
     });
   }
+}
+
+// ----------------------------
+// Sentence mining (background)
+// ----------------------------
+
+let currentShowCache = null;
+chrome.storage.local.get('currentShow').then(r => { currentShowCache = r.currentShow || null; }).catch(() => {});
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.currentShow) {
+    currentShowCache = changes.currentShow.newValue || null;
+  }
+});
+
+const subtitleEventBufferByTab = new Map(); // tabId -> events[]
+let lastMiningRunAt = 0;
+const MINING_THROTTLE_MS = 30_000;
+const MAX_EVENTS_PER_TAB = 400;
+const MAX_MINING_QUEUE = 600;
+
+function normalizeJapanese(s) {
+  return (s || '')
+    .replace(/\s+/g, '')
+    .replace(/[\u3000]/g, '')
+    .trim();
+}
+
+function hashString(str) {
+  // DJB2-ish, stable and fast
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) + h) ^ str.charCodeAt(i);
+  }
+  // Convert to unsigned base36
+  return (h >>> 0).toString(36);
+}
+
+async function recordSubtitleEvent({ tabId, subtitle, platform, ts }) {
+  try {
+    if (!subtitle) return;
+    const events = subtitleEventBufferByTab.get(tabId) || [];
+    events.push({
+      subtitle,
+      platform: platform || 'unknown',
+      ts: typeof ts === 'number' ? ts : Date.now(),
+      show: currentShowCache || null
+    });
+    if (events.length > MAX_EVENTS_PER_TAB) events.splice(0, events.length - MAX_EVENTS_PER_TAB);
+    subtitleEventBufferByTab.set(tabId, events);
+
+    // Throttled mining queue update; never awaited by overlay path
+    void maybeUpdateSentenceMiningQueue(tabId);
+  } catch (e) {
+    // Never throw from background capture
+  }
+}
+
+async function maybeUpdateSentenceMiningQueue(tabId) {
+  const now = Date.now();
+  if ((now - lastMiningRunAt) < MINING_THROTTLE_MS) return;
+  lastMiningRunAt = now;
+
+  const events = subtitleEventBufferByTab.get(tabId) || [];
+  if (events.length < 3) return;
+
+  // Build simple candidates: each line with +/- 1 context line
+  const candidates = [];
+  for (let i = Math.max(1, events.length - 60); i < events.length - 1; i++) {
+    const cur = events[i];
+    const before = events[i - 1];
+    const after = events[i + 1];
+    const text = cur.subtitle;
+    const norm = normalizeJapanese(text);
+    if (!norm) continue;
+    // Skip very short fragments
+    if (norm.length < 6) continue;
+    const id = hashString(norm);
+    candidates.push({
+      id,
+      text,
+      before: before ? before.subtitle : '',
+      after: after ? after.subtitle : '',
+      firstSeenAt: cur.ts,
+      platform: cur.platform,
+      show: cur.show
+    });
+  }
+
+  if (candidates.length === 0) return;
+
+  // Merge into stored mining queue (dedupe by id)
+  const existing = await chrome.storage.local.get('sentenceMiningQueue');
+  const queue = Array.isArray(existing.sentenceMiningQueue) ? existing.sentenceMiningQueue : [];
+  const byId = new Map(queue.map(item => [item.id, item]));
+
+  for (const c of candidates) {
+    const prev = byId.get(c.id);
+    if (prev) {
+      prev.lastSeenAt = now;
+      prev.occurrences = (prev.occurrences || 1) + 1;
+    } else {
+      byId.set(c.id, {
+        id: c.id,
+        text: c.text,
+        before: c.before,
+        after: c.after,
+        show: c.show,
+        platform: c.platform,
+        firstSeenAt: c.firstSeenAt,
+        lastSeenAt: now,
+        occurrences: 1,
+        status: 'new'
+      });
+    }
+  }
+
+  const merged = Array.from(byId.values())
+    .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
+    .slice(0, MAX_MINING_QUEUE);
+
+  await chrome.storage.local.set({ sentenceMiningQueue: merged });
 }
